@@ -2,14 +2,28 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, LogIn } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '@/authConfig';
+import { useEffect } from 'react';
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { instance } = useMsal();
+  const { instance, accounts } = useMsal();
+  const isAuthenticated = accounts.length > 0;
+
+  // Redirect authenticated users to plan meeting page
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/plan');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleLoginRedirect = () => {
     instance.loginRedirect(loginRequest).catch((error) => console.log(error));
   };
+
+  // Don't render anything if redirecting
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-white flex items-center justify-center">

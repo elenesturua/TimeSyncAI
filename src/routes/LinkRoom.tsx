@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Calendar, Users, Settings, LogIn, RefreshCw } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useMsal } from '@azure/msal-react';
 import { linkApi, withBearer, type Participant, type Suggestion } from '@/lib/api';
 import ParticipantCard from '@/components/ParticipantCard';
 import SuggestionCard from '@/components/SuggestionCard';
@@ -14,7 +14,17 @@ import Loader from '@/components/Loader';
 export default function LinkRoom() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { account, signIn, getAccessToken } = useAuth();
+  const { instance, accounts } = useMsal();
+  const account = accounts[0];
+  
+  const getAccessToken = async () => {
+    if (!account) throw new Error("No account");
+    const response = await instance.acquireTokenSilent({
+      scopes: ['Calendars.Read', 'Calendars.ReadWrite'],
+      account: account
+    });
+    return response.accessToken;
+  };
   
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -46,7 +56,9 @@ export default function LinkRoom() {
 
   const connectCalendar = async () => {
     if (!account) {
-      signIn();
+      instance.loginRedirect({
+        scopes: ['Calendars.Read', 'Calendars.ReadWrite']
+      });
       return;
     }
 
@@ -106,7 +118,9 @@ export default function LinkRoom() {
           <p className="text-gray-600 mb-6">
             Connect your Outlook calendar to participate in scheduling.
           </p>
-          <button onClick={signIn} className="btn-primary">
+          <button onClick={() => instance.loginRedirect({
+            scopes: ['Calendars.Read', 'Calendars.ReadWrite']
+          })} className="btn-primary">
             Sign in with Outlook
           </button>
         </div>

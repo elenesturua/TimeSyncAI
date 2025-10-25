@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MsalProvider } from '@azure/msal-react';
 import LandingPage from "@/routes/LandingPage";
+import PlanMeeting from "@/routes/PlanMeeting";
+import Dashboard from "@/routes/Dashboard";
 import CreateMeeting from "@/routes/CreateMeeting";
 import MeetingSent from "@/routes/MeetingSent";
 import MeetingRoom from "@/routes/MeetingRoom";
@@ -37,6 +39,8 @@ const App = ({ instance }: { instance: any }) => {
             <PageLayout>
               <Routes>
                 <Route path="/" element={<LandingPage />} />
+                <Route path="/plan" element={<div className="bg-gray-50 min-h-screen"><PlanMeeting /></div>} />
+                <Route path="/dashboard" element={<div className="bg-gray-50 min-h-screen"><Dashboard /></div>} />
                 <Route path="/create-meeting" element={<div className="bg-gray-50 min-h-screen"><CreateMeeting /></div>} />
                 <Route path="/meeting-sent" element={<div className="bg-gray-50 min-h-screen"><MeetingSent /></div>} />
                 <Route path="/meeting/:id" element={<div className="bg-gray-50 min-h-screen"><MeetingRoom /></div>} />

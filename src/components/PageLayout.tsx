@@ -10,13 +10,7 @@ export const PageLayout = (props: { children: React.ReactNode }) => {
     return (
         <>
             <Navbar />
-            <br />
-            <h5>
-                <center>Welcome to TimeSyncAI - AI-Powered Meeting Scheduling</center>
-            </h5>
-            <br />
             {props.children}
-            <br />
             <AuthenticatedTemplate>
                 <footer className="text-center text-gray-500 py-8">
                     <center>

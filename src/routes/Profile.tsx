@@ -10,6 +10,7 @@ export default function Profile() {
   const { instance, accounts } = useMsal();
   
   const account = accounts[0];
+  const isAuthenticated = accounts.length > 0;
   
   const [preferredHours, setPreferredHours] = useState({ start: '09:00', end: '17:00' });
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -54,7 +55,7 @@ export default function Profile() {
     instance.logoutRedirect();
   };
 
-  if (!account) {
+  if (!isAuthenticated) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="card text-center">
