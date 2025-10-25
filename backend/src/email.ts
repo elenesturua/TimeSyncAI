@@ -1,12 +1,8 @@
-// app/api/send-invite/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { Request, Response } from "express";
 import nodemailer from "nodemailer";
 import { createEvent } from "ics";
 import { DateTime } from "luxon";
 import { z } from "zod";
-
-// Ensure Node.js runtime (Nodemailer doesn't work on edge)
-export const runtime = "nodejs";
 
 const SingleMeeting = z.object({
   title: z.string().min(1),
@@ -70,10 +66,9 @@ function buildIcs(meeting: z.infer<typeof SingleMeeting>, extras: {
   return value; // the .ics content
 }
 
-export async function POST(req: NextRequest) {
+export async function sendInviteEmail(req: Request, res: Response) {
   try {
-    const body = await req.json();
-    const parsed = Payload.parse(body);
+    const parsed = Payload.parse(req.body);
 
     const from = process.env.FROM_EMAIL ?? "TimeSyncAI <noreply@yourdomain.com>";
     const organizerEmail =
@@ -154,10 +149,10 @@ export async function POST(req: NextRequest) {
         });
       });
     } else {
-      return NextResponse.json(
-        { success: false, error: "Provide either 'meeting' or 'options'." },
-        { status: 400 }
-      );
+      return res.status(400).json({
+        success: false,
+        error: "Provide either 'meeting' or 'options'."
+      });
     }
 
     const subject = parsed.meeting
@@ -174,12 +169,23 @@ export async function POST(req: NextRequest) {
       attachments,
     });
 
-    return NextResponse.json({ success: true, messageId: info.messageId });
+    return res.status(200).json({ success: true, messageId: info.messageId });
   } catch (err) {
-    console.error(err);
-    return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : "Unknown error" },
-      { status: 500 }
-    );
+    console.error("Error sending email:", err);
+    
+    // Handle Zod validation errors
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: "Validation error",
+        details: err.errors
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error"
+    });
   }
 }
+

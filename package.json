@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:full": "concurrently \"npm run dev\" \"npm run dev:backend\" --names \"frontend,backend\" --prefix-colors \"cyan,magenta\"",
     "build": "tsc && vite build",
+    "build:backend": "cd backend && npm run build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "install:backend": "cd backend && npm install"
   },
   "dependencies": {
     "@azure/msal-browser": "^4.24.0",
@@ -17,19 +21,25 @@
     "bootstrap": "^5.3.8",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
+    "ics": "^3.8.1",
     "lucide-react": "^0.294.0",
+    "luxon": "^3.7.2",
+    "nodemailer": "^7.0.10",
     "react": "^18.2.0",
     "react-bootstrap": "^2.10.10",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.1"
+    "react-router-dom": "^6.20.1",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/nodemailer": "^7.0.3",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
     "@typescript-eslint/eslint-plugin": "^6.10.0",
     "@typescript-eslint/parser": "^6.10.0",
     "@vitejs/plugin-react": "^4.1.1",
     "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
     "eslint": "^8.53.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.4",
