@@ -274,10 +274,10 @@ export class User {
    * @returns boolean - True if the time slot is available
    */
   isTimeSlotAvailable(startTime: Date, endTime: Date): boolean {
-    // Check if the time is within working hours
-    const startHour = startTime.getHours();
-    const endHour = endTime.getHours();
-    const dayOfWeek = startTime.getDay();
+    // Check if the time is within working hours (use UTC time)
+    const startHour = startTime.getUTCHours();
+    const endHour = endTime.getUTCHours();
+    const dayOfWeek = startTime.getUTCDay();
     
     // Check if it's a working day
     if (!this.workingTime.workingDays.includes(dayOfWeek)) {
@@ -455,25 +455,29 @@ export class Schedule {
   ): TimeInterval[] {
     const slots: TimeInterval[] = [];
     
-    // Create a new date object for the specific day
-    const dayDate = new Date(date);
-    dayDate.setHours(0, 0, 0, 0);
+    // Create a new date object for the specific day (ensure UTC)
+    const dayDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
     
     // Generate slots from startHour to endHour
     for (let hour = startHour; hour < endHour; hour++) {
       for (let minute = 0; minute < 60; minute += 5) {
         const slotStart = new Date(dayDate);
-        slotStart.setHours(hour, minute, 0, 0);
+        slotStart.setUTCHours(hour, minute, 0, 0);
         
         const slotEnd = new Date(slotStart);
-        slotEnd.setMinutes(slotEnd.getMinutes() + meetingDurationMinutes);
+        slotEnd.setUTCMinutes(slotEnd.getUTCMinutes() + meetingDurationMinutes);
         
         // Check if the slot ends before the end hour
-        if (slotEnd.getHours() <= endHour || (slotEnd.getHours() === endHour && slotEnd.getMinutes() === 0)) {
-          slots.push({
-            start: slotStart,
-            end: slotEnd
-          });
+        if (slotEnd.getUTCHours() <= endHour || (slotEnd.getUTCHours() === endHour && slotEnd.getUTCMinutes() === 0)) {
+          // Only add slots where all High priority users can attend
+          const allHighCanAttend = this.High.every(user => user.isTimeSlotAvailable(slotStart, slotEnd));
+          
+          if (allHighCanAttend) {
+            slots.push({
+              start: slotStart,
+              end: slotEnd
+            });
+          }
         }
       }
     }
@@ -498,7 +502,7 @@ export class Schedule {
         return;
       }
 
-      await Promise.all(allUsers.map(user => user.updateBusySchedule(this.StartDate.toISOString(), this.EndDate.toISOString())));
+      await Promise.all(allUsers.map(user => user.updateBusySchedule(this.StartDate.toISOString().split('T')[0], this.EndDate.toISOString().split('T')[0])));
       
       // Parse start and end dates
       const startDateObj = new Date(this.StartDate);
@@ -507,7 +511,7 @@ export class Schedule {
       this.ScoredTimeIntervals = [];
       
       // Iterate through each day in the date range
-      for (let currentDate = new Date(startDateObj); currentDate <= endDateObj; currentDate.setDate(currentDate.getDate() + 1)) {
+      for (let currentDate = new Date(startDateObj); currentDate <= endDateObj; currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000)) {
         // Generate time slots for this day using the first user's working hours as reference
         const referenceUser = allUsers[0];
         const daySlots = this.generateDayTimeSlots(
