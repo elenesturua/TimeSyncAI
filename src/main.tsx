@@ -21,11 +21,24 @@ if (!msalInstance.getActiveAccount() && msalInstance.getAllAccounts().length > 0
 // Listen for sign-in event and set active account
 msalInstance.addEventCallback((event) => {
     console.log('MSAL Event:', event.eventType, event);
-    if (event.eventType === EventType.LOGIN_SUCCESS && event.payload.account) {
-        const account = event.payload.account;
+    if (event.eventType === EventType.LOGIN_SUCCESS && event.payload && 'account' in event.payload) {
+        const account = (event.payload as any).account;
         console.log('Setting active account:', account);
         msalInstance.setActiveAccount(account);
     }
+});
+
+// Initialize MSAL and handle redirect
+msalInstance.initialize().then(() => {
+    // Handle redirect promise
+    msalInstance.handleRedirectPromise().then((response) => {
+        if (response && response.account) {
+            console.log('Redirect response account:', response.account);
+            msalInstance.setActiveAccount(response.account);
+        }
+    }).catch((error) => {
+        console.error('Redirect promise error:', error);
+    });
 });
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);

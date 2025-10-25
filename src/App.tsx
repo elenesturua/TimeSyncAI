@@ -11,6 +11,7 @@ import Success from "@/routes/Success";
 import Groups from "@/routes/Groups";
 import Profile from "@/routes/Profile";
 import TestEmail from "@/routes/TestEmail";
+import CalendarDebug from "@/routes/CalendarDebug";
 import { PageLayout } from "@/components/PageLayout";
 import "@/styles/tailwind.css";
 
@@ -45,9 +46,10 @@ const App = ({ instance }: { instance: any }) => {
                 <Route path="/meeting-sent" element={<div className="bg-gray-50 min-h-screen"><MeetingSent /></div>} />
                 <Route path="/meeting/:id" element={<div className="bg-gray-50 min-h-screen"><MeetingRoom /></div>} />
                 <Route path="/meeting/:id/success" element={<div className="bg-gray-50 min-h-screen"><Success /></div>} />
-                <Route path="/groups" element={<div className="bg-gray-50 min-h-screen"><Groups /></div>} />
-                <Route path="/profile" element={<div className="bg-gray-50 min-h-screen"><Profile /></div>} />
-                <Route path="/test-email" element={<div className="bg-gray-50 min-h-screen"><TestEmail /></div>} />
+                    <Route path="/groups" element={<div className="bg-gray-50 min-h-screen"><Groups /></div>} />
+                            <Route path="/profile" element={<div className="bg-gray-50 min-h-screen"><Profile /></div>} />
+                    <Route path="/test-email" element={<div className="bg-gray-50 min-h-screen"><TestEmail /></div>} />
+                    <Route path="/calendar-debug" element={<div className="bg-gray-50 min-h-screen"><CalendarDebug /></div>} />
               </Routes>
             </PageLayout>
           </div>

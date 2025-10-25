@@ -16,6 +16,7 @@
   "dependencies": {
     "@azure/msal-browser": "^4.24.0",
     "@azure/msal-react": "^3.0.20",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
     "@tanstack/react-query": "^5.8.4",
     "axios": "^1.6.2",
     "bootstrap": "^5.3.8",
