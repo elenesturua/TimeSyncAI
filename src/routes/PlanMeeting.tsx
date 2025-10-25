@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Calendar, Clock, MapPin, Plus, X, Copy, Link, Star, CheckCircle, AlertCircle } from 'lucide-react';
+import { Users, Calendar, Clock, MapPin, Plus, X, Copy, Link, Star, CheckCircle, AlertCircle, FolderOpen, ChevronDown, Sun, Moon } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import Loader from '@/components/Loader';
 import ParticipantCard from '@/components/ParticipantCard';
@@ -8,6 +8,7 @@ import SuggestionCard from '@/components/SuggestionCard';
 import BookingModal from '@/components/BookingModal';
 import HoursChips from '@/components/HoursChips';
 import CopyButton from '@/components/CopyButton';
+import { groupsApi, withBearer, type Group } from '@/lib/api';
 
 interface Participant {
   email: string;
@@ -30,19 +31,35 @@ export default function PlanMeeting() {
   const account = accounts[0];
   const isAuthenticated = accounts.length > 0;
   
+  const getAccessToken = async () => {
+    if (!account) throw new Error("No account");
+    const response = await instance.acquireTokenSilent({
+      scopes: ['Calendars.Read', 'Calendars.ReadWrite'],
+      account: account
+    });
+    return response.accessToken;
+  };
+  
   // State
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [newParticipantEmail, setNewParticipantEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [inviteLink, setInviteLink] = useState('');
   const [duration, setDuration] = useState(60);
-  const [dateRange, setDateRange] = useState(14);
-  const [preferredHours, setPreferredHours] = useState({ start: '09:00', end: '17:00' });
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [preferredHours, setPreferredHours] = useState<string[]>(['morning', 'afternoon']);
+  const [customHours, setCustomHours] = useState({ start: '09:00', end: '17:00' });
   const [allowAbsences, setAllowAbsences] = useState(0);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
+  
+  // Groups state
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [showGroupsDropdown, setShowGroupsDropdown] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
 
   // Primary CTA state
   const getPrimaryCTAState = () => {
@@ -54,6 +71,101 @@ export default function PlanMeeting() {
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
+
+  const hourRanges = [
+    { id: 'morning', label: 'Morning', icon: Sun, start: '06:00', end: '12:00' },
+    { id: 'afternoon', label: 'Afternoon', icon: Sun, start: '12:00', end: '18:00' },
+    { id: 'evening', label: 'Evening', icon: Moon, start: '18:00', end: '22:00' },
+  ];
+
+  const toggleHourRange = (rangeId: string) => {
+    setPreferredHours(prev => 
+      prev.includes(rangeId) 
+        ? prev.filter(id => id !== rangeId)
+        : [...prev, rangeId]
+    );
+  };
+
+  const getDefaultDateRange = () => {
+    const today = new Date();
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    
+    return {
+      start: today.toISOString().split('T')[0],
+      end: nextWeek.toISOString().split('T')[0]
+    };
+  };
+
+  useEffect(() => {
+    const defaultRange = getDefaultDateRange();
+    setDateRange(defaultRange);
+  }, []);
+
+  const loadGroups = async () => {
+    if (!isAuthenticated) return;
+    
+    setIsLoadingGroups(true);
+    try {
+      // For demo purposes, use mock data
+      const mockGroups: Group[] = [
+        {
+          id: '1',
+          name: 'Development Team',
+          participants: ['john@example.com', 'jane@example.com', 'bob@example.com'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: '2', 
+          name: 'Marketing Squad',
+          participants: ['alice@example.com', 'charlie@example.com'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      ];
+      setGroups(mockGroups);
+      
+      // Uncomment when API is ready:
+      // const data = await withBearer(getAccessToken, groupsApi.getAll);
+      // setGroups(data);
+    } catch (error) {
+      console.error('Failed to load groups:', error);
+    } finally {
+      setIsLoadingGroups(false);
+    }
+  };
+
+  const selectGroup = (group: Group) => {
+    const groupParticipants = group.participants.map(email => ({
+      email,
+      connected: false
+    }));
+    setParticipants(groupParticipants);
+    setSelectedGroup(group);
+    setShowGroupsDropdown(false);
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadGroups();
+    }
+  }, [isAuthenticated]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('[data-groups-dropdown]')) {
+        setShowGroupsDropdown(false);
+      }
+    };
+
+    if (showGroupsDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showGroupsDropdown]);
 
   const addParticipant = (email: string) => {
     const cleanEmail = email.trim().toLowerCase();
@@ -277,6 +389,85 @@ export default function PlanMeeting() {
               <div className="flex-1 border-t border-gray-200"></div>
             </div>
 
+            {/* Choose from Saved Groups Dropdown */}
+            <div className="relative" data-groups-dropdown>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Choose from saved groups
+              </label>
+              {groups.length > 0 ? (
+                <>
+                  <button
+                    onClick={() => setShowGroupsDropdown(!showGroupsDropdown)}
+                    className="w-full p-3 text-left border border-gray-200 rounded-lg hover:border-primary-300 focus:border-primary-300 focus:outline-none transition-colors flex items-center justify-between"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <FolderOpen className="h-5 w-5 text-gray-400" />
+                      <div>
+                        {selectedGroup ? (
+                          <>
+                            <p className="font-medium text-gray-900">{selectedGroup.name}</p>
+                            <p className="text-sm text-gray-600">{selectedGroup.participants.length} participants</p>
+                          </>
+                        ) : (
+                          <p className="text-gray-500">Select a group...</p>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${showGroupsDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {showGroupsDropdown && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {selectedGroup && (
+                        <button
+                          onClick={() => {
+                            setSelectedGroup(null);
+                            setParticipants([]);
+                            setShowGroupsDropdown(false);
+                          }}
+                          className="w-full p-3 text-left hover:bg-gray-50 transition-colors flex items-center space-x-3 border-b border-gray-100"
+                        >
+                          <X className="h-5 w-5 text-gray-400" />
+                          <div>
+                            <p className="font-medium text-gray-600">Clear selection</p>
+                            <p className="text-sm text-gray-500">Remove all participants</p>
+                          </div>
+                        </button>
+                      )}
+                      {groups.map((group) => (
+                        <button
+                          key={group.id}
+                          onClick={() => selectGroup(group)}
+                          className={`w-full p-3 text-left hover:bg-primary-50 transition-colors flex items-center space-x-3 ${
+                            selectedGroup?.id === group.id ? 'bg-primary-50 border-l-4 border-primary-500' : ''
+                          }`}
+                        >
+                          <FolderOpen className="h-5 w-5 text-gray-400" />
+                          <div>
+                            <p className="font-medium text-gray-900">{group.name}</p>
+                            <p className="text-sm text-gray-600">{group.participants.length} participants</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="p-4 text-center border border-gray-200 rounded-lg bg-gray-50">
+                  <FolderOpen className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600">No saved groups yet</p>
+                  <p className="text-xs text-gray-500 mt-1">Create groups after scheduling meetings</p>
+                </div>
+              )}
+            </div>
+
+            {/* OR Divider */}
+            <div className="flex items-center space-x-4">
+              <div className="flex-1 border-t border-gray-200"></div>
+              <span className="text-sm text-gray-500">OR</span>
+              <div className="flex-1 border-t border-gray-200"></div>
+            </div>
+
             {/* Invite Link */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -348,14 +539,20 @@ export default function PlanMeeting() {
               </div>
             )}
 
-            {/* Connect Calendar */}
-            {account && !isUserConnected && (
+            {/* Continue Button */}
+            {participants.length > 0 && (
               <div className="pt-4 border-t border-gray-200">
                 <button
-                  onClick={connectCalendar}
+                  onClick={() => {
+                    // Scroll to next section or continue with the flow
+                    const nextSection = document.querySelector('[data-section="when"]');
+                    if (nextSection) {
+                      nextSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
                   className="btn-primary w-full"
                 >
-                  Connect my calendar
+                  Continue
                 </button>
               </div>
             )}
@@ -363,7 +560,7 @@ export default function PlanMeeting() {
         </div>
 
         {/* Section B - When */}
-        <div className="card">
+        <div className="card" data-section="when">
           <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
             <Clock className="h-5 w-5 mr-2" />
             When
@@ -395,31 +592,97 @@ export default function PlanMeeting() {
             {/* Date Range */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                Look ahead
+                Date range
               </label>
-              <div className="flex space-x-2">
-                {[7, 14, 30].map((days) => (
-                  <button
-                    key={days}
-                    onClick={() => setDateRange(days)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      dateRange === days
-                        ? 'bg-primary-100 text-primary-700 border-2 border-primary-300'
-                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    {days} days
-                  </button>
-                ))}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">From</label>
+                  <input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="input-field"
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">To</label>
+                  <input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="input-field"
+                    min={dateRange.start || new Date().toISOString().split('T')[0]}
+                  />
+                </div>
               </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Select the date range to search for available times
+              </p>
             </div>
 
             {/* Preferred Hours */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                Preferred hours
+                Preferred hours (select multiple)
               </label>
-              <HoursChips value={preferredHours} onChange={setPreferredHours} />
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-3">
+                  {hourRanges.map((range) => {
+                    const Icon = range.icon;
+                    const isSelected = preferredHours.includes(range.id);
+                    return (
+                      <button
+                        key={range.id}
+                        onClick={() => toggleHourRange(range.id)}
+                        className={`flex items-center space-x-2 px-4 py-3 rounded-lg font-medium transition-colors border-2 ${
+                          isSelected
+                            ? 'bg-primary-100 text-primary-700 border-primary-300'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border-gray-200'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span>{range.label}</span>
+                        <span className="text-xs opacity-75">({range.start}-{range.end})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Custom Hours */}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <input
+                      type="checkbox"
+                      id="custom-hours"
+                      checked={preferredHours.includes('custom')}
+                      onChange={(e) => toggleHourRange('custom')}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <label htmlFor="custom-hours" className="text-sm font-medium text-gray-700">
+                      Custom hours
+                    </label>
+                  </div>
+                  
+                  {preferredHours.includes('custom') && (
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="time"
+                        value={customHours.start}
+                        onChange={(e) => setCustomHours(prev => ({ ...prev, start: e.target.value }))}
+                        className="input-field"
+                      />
+                      <span className="text-gray-500">to</span>
+                      <input
+                        type="time"
+                        value={customHours.end}
+                        onChange={(e) => setCustomHours(prev => ({ ...prev, end: e.target.value }))}
+                        className="input-field"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Advanced Options */}
