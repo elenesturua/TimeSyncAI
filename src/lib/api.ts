@@ -97,3 +97,46 @@ export const groupsApi = {
     return response.data;
   }
 };
+
+// Email API Types
+interface SingleMeeting {
+  title: string;
+  description?: string;
+  location?: string;
+  startISO: string;
+  endISO: string;
+  timezone?: string;
+}
+
+export interface SendInviteRequest {
+  to: string;
+  cc?: string[];
+  plan?: string;
+  organizerName?: string;
+  organizerEmail?: string;
+  meeting?: SingleMeeting;
+  options?: SingleMeeting[];
+}
+
+export interface SendInviteResponse {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+// Email API - connects to local backend server
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
+export const emailApi = {
+  sendInvite: async (data: SendInviteRequest): Promise<SendInviteResponse> => {
+    try {
+      const response = await axios.post(`${BACKEND_URL}/api/send-invite`, data);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        return error.response.data;
+      }
+      throw error;
+    }
+  }
+};

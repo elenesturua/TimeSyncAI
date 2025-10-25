@@ -10,6 +10,7 @@ import MeetingRoom from "@/routes/MeetingRoom";
 import Success from "@/routes/Success";
 import Groups from "@/routes/Groups";
 import Profile from "@/routes/Profile";
+import TestEmail from "@/routes/TestEmail";
 import { PageLayout } from "@/components/PageLayout";
 import "@/styles/tailwind.css";
 
@@ -46,6 +47,7 @@ const App = ({ instance }: { instance: any }) => {
                 <Route path="/meeting/:id/success" element={<div className="bg-gray-50 min-h-screen"><Success /></div>} />
                 <Route path="/groups" element={<div className="bg-gray-50 min-h-screen"><Groups /></div>} />
                 <Route path="/profile" element={<div className="bg-gray-50 min-h-screen"><Profile /></div>} />
+                <Route path="/test-email" element={<div className="bg-gray-50 min-h-screen"><TestEmail /></div>} />
               </Routes>
             </PageLayout>
           </div>
