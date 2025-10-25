@@ -1,10 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import { Calendar, LogIn } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useMsal } from '@azure/msal-react';
+import { loginRequest } from '@/authConfig';
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { account, signIn } = useAuth();
+  const { instance } = useMsal();
+
+  const handleLoginRedirect = () => {
+    instance.loginRedirect(loginRequest).catch((error) => console.log(error));
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-white flex items-center justify-center">
@@ -24,7 +29,7 @@ export default function LandingPage() {
 
         <div className="flex items-center justify-center">
           <button
-            onClick={signIn}
+            onClick={handleLoginRedirect}
             className="btn-primary text-xl px-12 py-6 flex items-center space-x-3 hover:scale-105 transition-transform"
           >
             <LogIn className="h-6 w-6" />
