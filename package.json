@@ -32,6 +32,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/luxon": "^3.7.1",
     "@types/nodemailer": "^7.0.3",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
