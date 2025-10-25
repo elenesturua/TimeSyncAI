@@ -5,7 +5,7 @@ import { useMsal } from '@azure/msal-react';
 import Loader from '@/components/Loader';
 import SuggestionCard from '@/components/SuggestionCard';
 import CopyButton from '@/components/CopyButton';
-import { groupsApi, withBearer, type Group } from '@/lib/api';
+import { type Group, emailApi } from '@/lib/api';
 import { createGraphClient, getUserProfile, getCalendarEvents, findAvailableSlots, type CalendarEvent } from '@/lib/graphApi';
 
 interface Participant {
@@ -26,7 +26,7 @@ interface Suggestion {
 
 export default function PlanMeeting() {
   const navigate = useNavigate();
-  const { accounts } = useMsal();
+  const { instance, accounts } = useMsal();
   const account = accounts[0];
   const isAuthenticated = accounts.length > 0;
   
@@ -45,6 +45,10 @@ export default function PlanMeeting() {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
+  
+  // Step-by-step flow state
+  const [currentStep, setCurrentStep] = useState<'who' | 'when' | 'suggestions' | 'booking'>('who');
+  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
   
   // Calendar state
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -142,22 +146,20 @@ export default function PlanMeeting() {
           id: '1',
           name: 'Development Team',
           participants: [
-            { email: 'john@example.com', name: 'John Doe', connected: false },
-            { email: 'jane@example.com', name: 'Jane Smith', connected: false },
-            { email: 'bob@example.com', name: 'Bob Wilson', connected: false }
+            { email: 'john@example.com', displayName: 'John Doe', timezone: 'UTC', connected: false },
+            { email: 'jane@example.com', displayName: 'Jane Smith', timezone: 'UTC', connected: false },
+            { email: 'bob@example.com', displayName: 'Bob Wilson', timezone: 'UTC', connected: false }
           ],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          createdAt: new Date().toISOString()
         },
         {
           id: '2', 
           name: 'Marketing Squad',
           participants: [
-            { email: 'alice@example.com', name: 'Alice Johnson', connected: false },
-            { email: 'charlie@example.com', name: 'Charlie Brown', connected: false }
+            { email: 'alice@example.com', displayName: 'Alice Johnson', timezone: 'UTC', connected: false },
+            { email: 'charlie@example.com', displayName: 'Charlie Brown', timezone: 'UTC', connected: false }
           ],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          createdAt: new Date().toISOString()
         }
       ];
       setGroups(mockGroups);
@@ -175,6 +177,7 @@ export default function PlanMeeting() {
   const selectGroup = (group: Group) => {
     const groupParticipants = group.participants.map(participant => ({
       email: participant.email,
+      name: participant.displayName,
       connected: false
     }));
     setParticipants(groupParticipants);
@@ -451,11 +454,12 @@ export default function PlanMeeting() {
 
       // Convert to suggestions format
       const newSuggestions: Suggestion[] = availableSlots.slice(0, 5).map((slot, index) => ({
-        startTime: slot.toISOString(),
-        endTime: new Date(slot.getTime() + duration * 60000).toISOString(),
-        score: 100 - (index * 10), // Decreasing score
-        conflicts: 0,
-        participants: participants.map(p => p.email)
+        startISO: slot.toISOString(),
+        endISO: new Date(slot.getTime() + duration * 60000).toISOString(),
+        attendeesFree: participants.map(p => p.email),
+        attendeesMissing: [],
+        badges: ['Available', 'Calendar-based'],
+        reason: `Found ${availableSlots.length} available time slots based on your calendar`
       }));
 
       setSuggestions(newSuggestions);
@@ -474,7 +478,6 @@ export default function PlanMeeting() {
     }
   };
 
-  const isUserConnected = account && participants.some(p => p.email === account.username);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -778,80 +781,6 @@ export default function PlanMeeting() {
                 >
                   Continue to When
                 </button>
-            {/* Calendar Connection */}
-            {participants.length > 0 && (
-              <div className="pt-4 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Calendar className="h-5 w-5 text-gray-600" />
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {isCalendarConnected ? 'Calendar Connected' : 'Connect Calendar'}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {isCalendarConnected 
-                          ? `Connected as ${userProfile?.displayName || account?.username}`
-                          : 'Connect your calendar to find available times'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {!isCalendarConnected ? (
-                    <button
-                      onClick={connectCalendar}
-                      disabled={isLoadingCalendar}
-                      className="btn-primary flex items-center space-x-2"
-                    >
-                      {isLoadingCalendar ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          <span>Connecting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Calendar className="h-4 w-4" />
-                          <span>Connect</span>
-                        </>
-                      )}
-                    </button>
-                  ) : (
-                    <div className="flex items-center space-x-2 text-green-600">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="text-sm font-medium">Connected</span>
-                    </div>
-                  )}
-                </div>
-                
-                {isCalendarConnected && (
-                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-800">
-                      📅 Found {calendarEvents.length} events in the next 7 days
-                    </p>
-                    {calendarEvents.length > 0 && (
-                      <details className="mt-2">
-                        <summary className="text-xs text-blue-700 cursor-pointer hover:text-blue-900">
-                          View calendar events (click to expand)
-                        </summary>
-                        <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
-                          {calendarEvents.slice(0, 5).map((event, index) => (
-                            <div key={event.id} className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
-                              <div className="font-medium">{event.subject}</div>
-                              <div className="text-blue-600">
-                                {new Date(event.start.dateTime).toLocaleString()} - {new Date(event.end.dateTime).toLocaleString()}
-                              </div>
-                            </div>
-                          ))}
-                          {calendarEvents.length > 5 && (
-                            <div className="text-xs text-blue-600 italic">
-                              ... and {calendarEvents.length - 5} more events
-                            </div>
-                          )}
-                        </div>
-                      </details>
-                    )}
-                  </div>
-                )}
               </div>
             )}
             </div>
@@ -1054,6 +983,83 @@ export default function PlanMeeting() {
                 >
                   Get AI Suggestions
                 </button>
+              </div>
+            )}
+
+            {/* Calendar Connection */}
+            {currentStep === 'when' && (
+              <div className="pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="h-5 w-5 text-gray-600" />
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {isCalendarConnected ? 'Calendar Connected' : 'Connect Calendar'}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {isCalendarConnected 
+                          ? `Connected as ${userProfile?.displayName || account?.username}`
+                          : 'Connect your calendar to find available times'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {!isCalendarConnected ? (
+                    <button
+                      onClick={connectCalendar}
+                      disabled={isLoadingCalendar}
+                      className="btn-primary flex items-center space-x-2"
+                    >
+                      {isLoadingCalendar ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Connecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Calendar className="h-4 w-4" />
+                          <span>Connect</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="flex items-center space-x-2 text-green-600">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="text-sm font-medium">Connected</span>
+                    </div>
+                  )}
+                </div>
+                
+                {isCalendarConnected && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      📅 Found {calendarEvents.length} events in the next 7 days
+                    </p>
+                    {calendarEvents.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="text-xs text-blue-700 cursor-pointer hover:text-blue-900">
+                          View calendar events (click to expand)
+                        </summary>
+                        <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                          {calendarEvents.slice(0, 5).map((event, index) => (
+                            <div key={event.id} className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
+                              <div className="font-medium">{event.subject}</div>
+                              <div className="text-blue-600">
+                                {new Date(event.start.dateTime).toLocaleString()} - {new Date(event.end.dateTime).toLocaleString()}
+                              </div>
+                            </div>
+                          ))}
+                          {calendarEvents.length > 5 && (
+                            <div className="text-xs text-blue-600 italic">
+                              ... and {calendarEvents.length - 5} more events
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             </div>
