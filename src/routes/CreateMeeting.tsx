@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Users, MapPin, Plus, X, Send } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useMsal } from '@azure/msal-react';
 import Loader from '@/components/Loader';
 
 interface Participant {
@@ -11,7 +11,8 @@ interface Participant {
 
 export default function CreateMeeting() {
   const navigate = useNavigate();
-  const { account } = useAuth();
+  const { accounts } = useMsal();
+  const account = accounts[0];
   
   const [meetingName, setMeetingName] = useState('');
   const [location, setLocation] = useState('');

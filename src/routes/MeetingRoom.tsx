@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Calendar, Users, Settings, LogIn, RefreshCw, Clock } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useMsal } from '@azure/msal-react';
 import ParticipantCard from '@/components/ParticipantCard';
 import SuggestionCard from '@/components/SuggestionCard';
 import BookingModal from '@/components/BookingModal';
@@ -21,7 +21,17 @@ interface MeetingData {
 export default function MeetingRoom() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { account, signIn, getAccessToken } = useAuth();
+  const { instance, accounts } = useMsal();
+  const account = accounts[0];
+  
+  const getAccessToken = async () => {
+    if (!account) throw new Error("No account");
+    const response = await instance.acquireTokenSilent({
+      scopes: ['Calendars.Read', 'Calendars.ReadWrite'],
+      account: account
+    });
+    return response.accessToken;
+  };
   
   const [meetingData, setMeetingData] = useState<MeetingData | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
@@ -87,7 +97,9 @@ export default function MeetingRoom() {
 
   const connectCalendar = async () => {
     if (!account) {
-      signIn();
+      instance.loginRedirect({
+        scopes: ['Calendars.Read', 'Calendars.ReadWrite']
+      });
       return;
     }
 

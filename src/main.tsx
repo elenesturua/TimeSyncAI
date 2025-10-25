@@ -20,8 +20,10 @@ if (!msalInstance.getActiveAccount() && msalInstance.getAllAccounts().length > 0
 
 // Listen for sign-in event and set active account
 msalInstance.addEventCallback((event) => {
+    console.log('MSAL Event:', event.eventType, event);
     if (event.eventType === EventType.LOGIN_SUCCESS && event.payload.account) {
         const account = event.payload.account;
+        console.log('Setting active account:', account);
         msalInstance.setActiveAccount(account);
     }
 });

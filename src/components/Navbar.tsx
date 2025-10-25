@@ -4,10 +4,16 @@ import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/
 import { loginRequest } from '@/authConfig';
 
 export default function Navbar() {
-  const { instance } = useMsal();
+  const { instance, accounts } = useMsal();
   const location = useLocation();
   
   const isLandingPage = location.pathname === '/';
+  const isAuthenticated = accounts.length > 0;
+  
+  // Debug logging
+  console.log('Navbar - Accounts:', accounts);
+  console.log('Navbar - Active Account:', instance.getActiveAccount());
+  console.log('Navbar - Is Authenticated:', isAuthenticated);
 
   const handleLoginRedirect = () => {
     instance.loginRedirect(loginRequest).catch((error) => console.log(error));
@@ -26,31 +32,31 @@ export default function Navbar() {
         </Link>
 
         <div className="flex items-center space-x-4">
-          <AuthenticatedTemplate>
-            <Link
-              to="/groups"
-              className={`${isLandingPage ? 'text-white hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'} px-3 py-2 rounded-lg hover:bg-white/10 transition-colors`}
-            >
-              Groups
-            </Link>
-            <Link
-              to="/profile"
-              className={`flex items-center space-x-2 ${isLandingPage ? 'text-white hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'} px-3 py-2 rounded-lg hover:bg-white/10 transition-colors`}
-            >
-              <User className="h-4 w-4" />
-              <span>Profile</span>
-            </Link>
-            <button
-              onClick={handleLogoutRedirect}
-              className={`flex items-center space-x-1 ${isLandingPage ? 'text-white hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'} px-3 py-2 rounded-lg hover:bg-white/10 transition-colors`}
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Sign out</span>
-            </button>
-          </AuthenticatedTemplate>
-          
-          <UnauthenticatedTemplate>
-            {!isLandingPage && (
+          {isAuthenticated ? (
+            <>
+              <Link
+                to="/groups"
+                className={`${isLandingPage ? 'text-white hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'} px-3 py-2 rounded-lg hover:bg-white/10 transition-colors`}
+              >
+                Groups
+              </Link>
+              <Link
+                to="/profile"
+                className={`flex items-center space-x-2 ${isLandingPage ? 'text-white hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'} px-3 py-2 rounded-lg hover:bg-white/10 transition-colors`}
+              >
+                <User className="h-4 w-4" />
+                <span>Profile</span>
+              </Link>
+              <button
+                onClick={handleLogoutRedirect}
+                className={`flex items-center space-x-1 ${isLandingPage ? 'text-white hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'} px-3 py-2 rounded-lg hover:bg-white/10 transition-colors`}
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign out</span>
+              </button>
+            </>
+          ) : (
+            !isLandingPage && (
               <button
                 onClick={handleLoginRedirect}
                 className="btn-primary flex items-center space-x-2"
@@ -58,8 +64,8 @@ export default function Navbar() {
                 <LogIn className="h-4 w-4" />
                 <span>Sign in with Outlook</span>
               </button>
-            )}
-          </UnauthenticatedTemplate>
+            )
+          )}
         </div>
       </div>
     </nav>

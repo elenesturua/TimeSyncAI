@@ -2,13 +2,24 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Calendar, Plus, Clock } from 'lucide-react';
 import { groupsApi, withBearer, type Group } from '@/lib/api';
-import { useAuth } from '@/context/AuthContext';
+import { useMsal } from '@azure/msal-react';
 import EmptyState from '@/components/EmptyState';
 import Loader from '@/components/Loader';
 
 export default function Groups() {
   const navigate = useNavigate();
-  const { account, getAccessToken } = useAuth();
+  const { instance, accounts } = useMsal();
+  const account = accounts[0];
+  const isAuthenticated = accounts.length > 0;
+  
+  const getAccessToken = async () => {
+    if (!account) throw new Error("No account");
+    const response = await instance.acquireTokenSilent({
+      scopes: ['Calendars.Read', 'Calendars.ReadWrite'],
+      account: account
+    });
+    return response.accessToken;
+  };
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -33,7 +44,7 @@ export default function Groups() {
     navigate(`/meeting/${groupId}`);
   };
 
-  if (!account) {
+  if (!isAuthenticated) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="card text-center">

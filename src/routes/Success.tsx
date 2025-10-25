@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Copy, ExternalLink, Users, Calendar, Video } from 'lucide-react';
 import { linkApi, withBearer } from '@/lib/api';
-import { useAuth } from '@/context/AuthContext';
+import { useMsal } from '@azure/msal-react';
 import CopyButton from '@/components/CopyButton';
 import { formatTimeSlot, parseISOTimeSlot } from '@/lib/time';
 import Loader from '@/components/Loader';
@@ -11,7 +11,17 @@ export default function Success() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getAccessToken } = useAuth();
+  const { instance } = useMsal();
+  
+  const getAccessToken = async () => {
+    const account = instance.getActiveAccount();
+    if (!account) throw new Error("No account");
+    const response = await instance.acquireTokenSilent({
+      scopes: ['Calendars.Read', 'Calendars.ReadWrite'],
+      account: account
+    });
+    return response.accessToken;
+  };
   
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [groupSaved, setGroupSaved] = useState(false);
