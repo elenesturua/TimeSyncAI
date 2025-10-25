@@ -58,6 +58,10 @@ export const loginRequest = {
         'Calendars.Read',
         'Calendars.ReadWrite'
     ],
+    prompt: 'select_account', // Forces account selection screen
+    extraQueryParameters: {
+        'prompt': 'select_account' // Additional parameter to ensure account picker
+    }
 };
 
 /**

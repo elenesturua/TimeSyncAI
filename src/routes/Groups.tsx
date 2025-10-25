@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Calendar, Plus, Clock } from 'lucide-react';
+import { Users, Calendar, Plus, Clock, Edit, Trash2, ArrowRight } from 'lucide-react';
 import { groupsApi, withBearer, type Group } from '@/lib/api';
 import { useMsal } from '@azure/msal-react';
 import EmptyState from '@/components/EmptyState';
@@ -35,6 +35,23 @@ export default function Groups() {
       setGroups(data);
     } catch (error) {
       console.error('Failed to load groups:', error);
+      // For demo purposes, show some mock data
+      setGroups([
+        {
+          id: '1',
+          name: 'Development Team',
+          participants: ['john@example.com', 'jane@example.com', 'bob@example.com'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: '2', 
+          name: 'Marketing Squad',
+          participants: ['alice@example.com', 'charlie@example.com'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -42,6 +59,27 @@ export default function Groups() {
 
   const handleOpenGroup = (groupId: string) => {
     navigate(`/meeting/${groupId}`);
+  };
+
+  const handleCreateNewGroup = () => {
+    navigate('/create-meeting');
+  };
+
+  const handleEditGroup = (groupId: string) => {
+    // TODO: Implement edit group functionality
+    console.log('Edit group:', groupId);
+  };
+
+  const handleDeleteGroup = async (groupId: string) => {
+    if (confirm('Are you sure you want to delete this group?')) {
+      try {
+        await groupsApi.delete(groupId);
+        setGroups(groups.filter(g => g.id !== groupId));
+      } catch (error) {
+        console.error('Failed to delete group:', error);
+        alert('Failed to delete group. Please try again.');
+      }
+    }
   };
 
   if (!isAuthenticated) {
@@ -59,90 +97,115 @@ export default function Groups() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">My Groups</h1>
-          <p className="text-gray-600">
-            Manage your saved meeting groups and recurring participants.
-          </p>
+        <div className="flex items-center space-x-3">
+          <div className="h-12 w-12 bg-primary-100 rounded-full flex items-center justify-center">
+            <Users className="h-6 w-6 text-primary-600" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">My Groups</h1>
+            <p className="text-gray-600">Manage your saved participant groups</p>
+          </div>
         </div>
+        
         <button
-          onClick={() => navigate('/create-meeting')}
+          onClick={handleCreateNewGroup}
           className="btn-primary flex items-center space-x-2"
         >
           <Plus className="h-4 w-4" />
-          <span>Create Meeting</span>
+          <span>New Group</span>
         </button>
       </div>
 
+      {/* Groups List */}
       {isLoading ? (
-        <div className="card">
+        <div className="card text-center py-12">
           <Loader text="Loading groups..." />
         </div>
       ) : groups.length === 0 ? (
         <EmptyState
-          icon={<Users className="h-12 w-12" />}
+          icon={<Users className="h-16 w-16" />}
           title="No groups yet"
-          description="Save a meeting as a group to quickly schedule recurring meetings with the same participants."
-          action={
-            <button
-              onClick={() => navigate('/create-meeting')}
-              className="btn-primary"
-            >
-              Create Your First Meeting
-            </button>
-          }
+          description="Create your first group to quickly invite the same people to meetings"
+          action={{
+            label: "Create Group",
+            onClick: handleCreateNewGroup
+          }}
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {groups.map((group) => (
-            <div
-              key={group.id}
-              className="card hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => handleOpenGroup(group.id)}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <h3 className="font-semibold text-gray-900 truncate">
-                  {group.name}
-                </h3>
-                <Users className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              </div>
-
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
-                  <Users className="h-4 w-4" />
-                  <span>{group.participants.length} participants</span>
+            <div key={group.id} className="card hover:shadow-lg transition-shadow">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                    {group.name}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {group.participants.length} participant{group.participants.length !== 1 ? 's' : ''}
+                  </p>
                 </div>
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
-                  <Calendar className="h-4 w-4" />
-                  <span>Created {new Date(group.createdAt).toLocaleDateString()}</span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-1 mb-4">
-                {group.participants.slice(0, 3).map((participant, index) => (
-                  <div
-                    key={index}
-                    className="h-6 w-6 bg-gray-200 rounded-full flex items-center justify-center"
-                    title={participant.displayName || participant.email}
+                
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => handleEditGroup(group.id)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Edit group"
                   >
-                    <span className="text-xs font-medium text-gray-600">
-                      {(participant.displayName || participant.email).charAt(0)}
-                    </span>
-                  </div>
-                ))}
-                {group.participants.length > 3 && (
-                  <div className="h-6 w-6 bg-gray-100 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-medium text-gray-500">
-                      +{group.participants.length - 3}
-                    </span>
-                  </div>
-                )}
+                    <Edit className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteGroup(group.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                    title="Delete group"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
-              <button className="w-full btn-secondary text-sm">
-                Open Group
-              </button>
+              {/* Participants */}
+              <div className="mb-4">
+                <div className="flex flex-wrap gap-2">
+                  {group.participants.slice(0, 3).map((email, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center space-x-2 px-2 py-1 bg-gray-100 rounded-full text-sm"
+                    >
+                      <div className="h-5 w-5 bg-primary-100 rounded-full flex items-center justify-center">
+                        <span className="text-primary-600 font-medium text-xs">
+                          {email.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="text-gray-700">{email}</span>
+                    </div>
+                  ))}
+                  {group.participants.length > 3 && (
+                    <div className="px-2 py-1 bg-gray-100 rounded-full text-sm text-gray-600">
+                      +{group.participants.length - 3} more
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                <div className="flex items-center space-x-2 text-sm text-gray-500">
+                  <Clock className="h-4 w-4" />
+                  <span>
+                    Updated {new Date(group.updatedAt).toLocaleDateString()}
+                  </span>
+                </div>
+                
+                <button
+                  onClick={() => handleOpenGroup(group.id)}
+                  className="btn-secondary flex items-center space-x-2"
+                >
+                  <span>Use Group</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
