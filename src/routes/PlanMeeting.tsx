@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Calendar, Clock, MapPin, Plus, X, Copy, Link, Star, CheckCircle, AlertCircle, FolderOpen, ChevronDown, Sun, Moon } from 'lucide-react';
+import { Users, Calendar, Clock, Plus, X, Link, Star, CheckCircle, FolderOpen, ChevronDown, Sun, Moon } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import Loader from '@/components/Loader';
-import ParticipantCard from '@/components/ParticipantCard';
 import SuggestionCard from '@/components/SuggestionCard';
-import BookingModal from '@/components/BookingModal';
-import HoursChips from '@/components/HoursChips';
 import CopyButton from '@/components/CopyButton';
 import { groupsApi, withBearer, type Group } from '@/lib/api';
 import { createGraphClient, getUserProfile, getCalendarEvents, findAvailableSlots, type CalendarEvent } from '@/lib/graphApi';
@@ -19,27 +16,20 @@ interface Participant {
 }
 
 interface Suggestion {
-  startTime: string;
-  endTime: string;
-  score: number;
-  conflicts: number;
-  participants: string[];
+  startISO: string;
+  endISO: string;
+  attendeesFree: string[];
+  attendeesMissing: string[];
+  badges: string[];
+  reason: string;
 }
 
 export default function PlanMeeting() {
   const navigate = useNavigate();
-  const { instance, accounts } = useMsal();
+  const { accounts } = useMsal();
   const account = accounts[0];
   const isAuthenticated = accounts.length > 0;
   
-  const getAccessToken = async () => {
-    if (!account) throw new Error("No account");
-    const response = await instance.acquireTokenSilent({
-      scopes: ['Calendars.Read', 'Calendars.ReadWrite'],
-      account: account
-    });
-    return response.accessToken;
-  };
   
   // State
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -68,12 +58,44 @@ export default function PlanMeeting() {
   const [showGroupsDropdown, setShowGroupsDropdown] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
 
-  // Primary CTA state
-  const getPrimaryCTAState = () => {
-    if (participants.length === 0) return 'create-link';
-    if (suggestions.length === 0) return 'get-suggestions';
-    return 'book';
+  // Step navigation functions
+  const nextStep = () => {
+    if (currentStep === 'who') {
+      setCurrentStep('when');
+      setCompletedSteps(prev => new Set([...prev, 'who']));
+    } else if (currentStep === 'when') {
+      setCurrentStep('suggestions');
+      setCompletedSteps(prev => new Set([...prev, 'when']));
+      // Automatically get suggestions when moving to suggestions step
+      getSuggestions();
+    } else if (currentStep === 'suggestions') {
+      setCurrentStep('booking');
+      setCompletedSteps(prev => new Set([...prev, 'suggestions']));
+    }
   };
+
+  const prevStep = () => {
+    if (currentStep === 'when') {
+      setCurrentStep('who');
+    } else if (currentStep === 'suggestions') {
+      setCurrentStep('when');
+    } else if (currentStep === 'booking') {
+      setCurrentStep('suggestions');
+    }
+  };
+
+  const canProceedFromWho = () => {
+    return participants.length > 0;
+  };
+
+  const canProceedFromWhen = () => {
+    return dateRange.start && dateRange.end && preferredHours.length > 0;
+  };
+
+  const canProceedFromSuggestions = () => {
+    return selectedSuggestion !== null;
+  };
+
 
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -151,7 +173,11 @@ export default function PlanMeeting() {
   };
 
   const selectGroup = (group: Group) => {
-    setParticipants(group.participants);
+    const groupParticipants = group.participants.map(participant => ({
+      email: participant.email,
+      connected: false
+    }));
+    setParticipants(groupParticipants);
     setSelectedGroup(group);
     setShowGroupsDropdown(false);
   };
@@ -264,25 +290,28 @@ export default function PlanMeeting() {
       // Mock suggestions
       const mockSuggestions: Suggestion[] = [
         {
-          startTime: '2024-01-15T10:00:00Z',
-          endTime: '2024-01-15T11:00:00Z',
-          score: 95,
-          conflicts: 0,
-          participants: participants.map(p => p.email)
+          startISO: '2024-01-15T10:00:00Z',
+          endISO: '2024-01-15T11:00:00Z',
+          attendeesFree: participants.map(p => p.email),
+          attendeesMissing: [],
+          badges: ['Perfect match', 'All available'],
+          reason: 'All participants are free during this time slot'
         },
         {
-          startTime: '2024-01-15T14:00:00Z',
-          endTime: '2024-01-15T15:00:00Z',
-          score: 88,
-          conflicts: 1,
-          participants: participants.map(p => p.email)
+          startISO: '2024-01-15T14:00:00Z',
+          endISO: '2024-01-15T15:00:00Z',
+          attendeesFree: participants.slice(0, -1).map(p => p.email),
+          attendeesMissing: participants.slice(-1).map(p => p.email),
+          badges: ['Good match', '1 conflict'],
+          reason: 'One participant has a minor conflict but can reschedule'
         },
         {
-          startTime: '2024-01-16T09:00:00Z',
-          endTime: '2024-01-16T10:00:00Z',
-          score: 82,
-          conflicts: 0,
-          participants: participants.map(p => p.email)
+          startISO: '2024-01-16T09:00:00Z',
+          endISO: '2024-01-16T10:00:00Z',
+          attendeesFree: participants.map(p => p.email),
+          attendeesMissing: [],
+          badges: ['Available', 'Next day'],
+          reason: 'All participants available, scheduled for next day'
         }
       ];
 
@@ -299,13 +328,44 @@ export default function PlanMeeting() {
       // TODO: Book meeting via backend
       console.log('Booking meeting:', booking);
       
+      // Send email invites to all participants
+      const emailPromises = participants.map(participant => 
+        emailApi.sendInvite({
+          to: participant.email,
+          organizerName: account?.name || 'TimeSyncAI User',
+          organizerEmail: account?.username || 'noreply@timesyncai.com',
+          plan: booking.description || 'Meeting scheduled via TimeSyncAI',
+          meeting: {
+            title: booking.title || 'Team Meeting',
+            description: booking.description || 'Meeting scheduled via TimeSyncAI',
+            location: booking.location || 'Virtual Meeting',
+            startISO: selectedSuggestion?.startISO || new Date().toISOString(),
+            endISO: selectedSuggestion?.endISO || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          }
+        })
+      );
+
+      // Send all emails
+      const emailResults = await Promise.allSettled(emailPromises);
+      
+      // Check if any emails failed
+      const failedEmails = emailResults
+        .map((result, index) => ({ result, participant: participants[index] }))
+        .filter(({ result }) => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.success));
+
+      if (failedEmails.length > 0) {
+        console.warn('Some emails failed to send:', failedEmails);
+      }
+      
       // Navigate to success page
       navigate('/meeting-sent', { 
         state: { 
           booking: {
             ...booking,
             meetingLink: 'https://teams.microsoft.com/l/meetup-join/...',
-            attendees: participants.map(p => p.email)
+            attendees: participants.map(p => p.email),
+            emailResults: emailResults.map(r => r.status === 'fulfilled' ? r.value : null)
           }
         } 
       });
@@ -431,14 +491,82 @@ export default function PlanMeeting() {
       </div>
 
       <div className="space-y-8">
+        {/* Progress Indicator */}
+        <div className="flex items-center justify-center space-x-4 mb-8">
+          {[
+            { id: 'who', label: 'Who', icon: Users },
+            { id: 'when', label: 'When', icon: Clock },
+            { id: 'suggestions', label: 'Suggestions', icon: Star },
+            { id: 'booking', label: 'Send', icon: CheckCircle }
+          ].map((step, index) => {
+            const Icon = step.icon;
+            const isCompleted = completedSteps.has(step.id);
+            const isCurrent = currentStep === step.id;
+            const isAccessible = index === 0 || completedSteps.has(['who', 'when', 'suggestions'][index - 1]);
+            
+            return (
+              <div key={step.id} className="flex items-center">
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
+                  isCompleted 
+                    ? 'bg-green-500 border-green-500 text-white' 
+                    : isCurrent 
+                    ? 'bg-primary-500 border-primary-500 text-white'
+                    : isAccessible
+                    ? 'border-gray-300 text-gray-500'
+                    : 'border-gray-200 text-gray-300'
+                }`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <span className={`ml-2 text-sm font-medium ${
+                  isCurrent ? 'text-primary-600' : isCompleted ? 'text-green-600' : 'text-gray-500'
+                }`}>
+                  {step.label}
+                </span>
+                {index < 3 && (
+                  <div className={`w-8 h-0.5 mx-4 ${
+                    completedSteps.has(step.id) ? 'bg-green-500' : 'bg-gray-200'
+                  }`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
         {/* Section A - Who */}
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-            <Users className="h-5 w-5 mr-2" />
-            Who
-          </h2>
+        <div className={`card transition-all duration-300 ${
+          currentStep === 'who' ? 'opacity-100' : 'opacity-60'
+        }`}>
+          <div 
+            className="flex items-center justify-between cursor-pointer"
+            onClick={() => setCurrentStep('who')}
+          >
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+              <Users className="h-5 w-5 mr-2" />
+              Who
+              {completedSteps.has('who') && <CheckCircle className="h-5 w-5 ml-2 text-green-500" />}
+            </h2>
+            <div className="flex items-center space-x-2">
+              {completedSteps.has('who') && (
+                <span className="text-sm text-green-600 font-medium">
+                  {participants.length} participant{participants.length !== 1 ? 's' : ''} added
+                </span>
+              )}
+              {currentStep !== 'who' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentStep('who');
+                  }}
+                  className="text-sm text-primary-600 hover:text-primary-700"
+                >
+                  {completedSteps.has('who') ? 'Edit' : 'Start'}
+                </button>
+              )}
+            </div>
+          </div>
           
-          <div className="space-y-4">
+          {currentStep === 'who' && (
+            <div className="space-y-4 mt-6">
             {/* Email Input */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -636,6 +764,20 @@ export default function PlanMeeting() {
               </div>
             )}
 
+            {/* Continue Button */}
+            {currentStep === 'who' && (
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={nextStep}
+                  disabled={!canProceedFromWho()}
+                  className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                    canProceedFromWho()
+                      ? 'bg-primary-600 text-white hover:bg-primary-700'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Continue to When
+                </button>
             {/* Calendar Connection */}
             {participants.length > 0 && (
               <div className="pt-4 border-t border-gray-200">
@@ -712,17 +854,45 @@ export default function PlanMeeting() {
                 )}
               </div>
             )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Section B - When */}
-        <div className="card" data-section="when">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-            <Clock className="h-5 w-5 mr-2" />
-            When
-          </h2>
+        <div className={`card transition-all duration-300 ${
+          currentStep === 'when' ? 'opacity-100' : 'opacity-60'
+        }`}>
+          <div 
+            className="flex items-center justify-between cursor-pointer"
+            onClick={() => setCurrentStep('when')}
+          >
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+              <Clock className="h-5 w-5 mr-2" />
+              When
+              {completedSteps.has('when') && <CheckCircle className="h-5 w-5 ml-2 text-green-500" />}
+            </h2>
+            <div className="flex items-center space-x-2">
+              {completedSteps.has('when') && (
+                <span className="text-sm text-green-600 font-medium">
+                  {duration}min • {preferredHours.length} time preference{preferredHours.length !== 1 ? 's' : ''}
+                </span>
+              )}
+              {currentStep !== 'when' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentStep('when');
+                  }}
+                  className="text-sm text-primary-600 hover:text-primary-700"
+                >
+                  {completedSteps.has('when') ? 'Edit' : 'Start'}
+                </button>
+              )}
+            </div>
+          </div>
           
-          <div className="space-y-6">
+          {currentStep === 'when' && (
+            <div className="space-y-6 mt-6">
             {/* Duration */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -869,17 +1039,63 @@ export default function PlanMeeting() {
                 </div>
               </div>
             </details>
-          </div>
+
+            {/* Continue Button */}
+            {currentStep === 'when' && (
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={nextStep}
+                  disabled={!canProceedFromWhen()}
+                  className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                    canProceedFromWhen()
+                      ? 'bg-primary-600 text-white hover:bg-primary-700'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Get AI Suggestions
+                </button>
+              </div>
+            )}
+            </div>
+          )}
         </div>
 
         {/* Section C - Suggestions */}
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-            <Star className="h-5 w-5 mr-2" />
-            AI Suggestions
-          </h2>
+        <div className={`card transition-all duration-300 ${
+          currentStep === 'suggestions' ? 'opacity-100' : 'opacity-60'
+        }`}>
+          <div 
+            className="flex items-center justify-between cursor-pointer"
+            onClick={() => setCurrentStep('suggestions')}
+          >
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+              <Star className="h-5 w-5 mr-2" />
+              AI Suggestions
+              {completedSteps.has('suggestions') && <CheckCircle className="h-5 w-5 ml-2 text-green-500" />}
+            </h2>
+            <div className="flex items-center space-x-2">
+              {completedSteps.has('suggestions') && selectedSuggestion && (
+                <span className="text-sm text-green-600 font-medium">
+                  Time selected • {new Date(selectedSuggestion.startISO).toLocaleDateString()}
+                </span>
+              )}
+              {currentStep !== 'suggestions' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentStep('suggestions');
+                  }}
+                  className="text-sm text-primary-600 hover:text-primary-700"
+                >
+                  {completedSteps.has('suggestions') ? 'Edit' : 'Start'}
+                </button>
+              )}
+            </div>
+          </div>
           
-          {suggestions.length === 0 ? (
+          {currentStep === 'suggestions' && (
+            <div className="mt-6">
+              {suggestions.length === 0 ? (
             <div className="text-center py-8">
               <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No suggestions yet</h3>
@@ -890,20 +1106,116 @@ export default function PlanMeeting() {
           ) : (
             <div className="space-y-4">
               {suggestions.map((suggestion, index) => (
-                <SuggestionCard
+                <div
                   key={index}
-                  suggestion={suggestion}
-                  onBook={setSelectedSuggestion}
-                />
+                  className={`cursor-pointer transition-all duration-200 ${
+                    selectedSuggestion === suggestion
+                      ? 'ring-2 ring-primary-500 bg-primary-50'
+                      : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => setSelectedSuggestion(suggestion)}
+                >
+                  <SuggestionCard
+                    suggestion={suggestion}
+                    onBook={() => setSelectedSuggestion(suggestion)}
+                  />
+                </div>
               ))}
             </div>
           )}
+
+          {/* Continue Button */}
+          {currentStep === 'suggestions' && suggestions.length > 0 && (
+            <div className="pt-4 border-t border-gray-200">
+              <button
+                onClick={nextStep}
+                disabled={!canProceedFromSuggestions()}
+                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                  canProceedFromSuggestions()
+                    ? 'bg-primary-600 text-white hover:bg-primary-700'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {selectedSuggestion ? 'Send Invites' : 'Select a time slot to continue'}
+              </button>
+            </div>
+          )}
+            </div>
+          )}
         </div>
+
+        {/* Section D - Booking Confirmation */}
+        {currentStep === 'booking' && selectedSuggestion && (
+          <div className="card">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                <CheckCircle className="h-5 w-5 mr-2" />
+                Send Invites
+              </h2>
+            </div>
+            
+            <div className="space-y-6">
+              {/* Selected Time Summary */}
+              <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+                <h3 className="font-semibold text-primary-900 mb-2">Selected Meeting Time</h3>
+                <p className="text-primary-700">
+                  {new Date(selectedSuggestion.startISO).toLocaleString()} - {new Date(selectedSuggestion.endISO).toLocaleString()}
+                </p>
+                <p className="text-sm text-primary-600 mt-1">
+                  Duration: {duration} minutes • {selectedSuggestion.badges.join(', ')}
+                </p>
+              </div>
+
+              {/* Participants Summary */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-3">Sending invites to:</h3>
+                <div className="space-y-2">
+                  {participants.map((participant, index) => (
+                    <div key={index} className="flex items-center space-x-3 p-2 bg-gray-50 rounded-lg">
+                      <div className="h-8 w-8 bg-primary-100 rounded-full flex items-center justify-center">
+                        <span className="text-primary-600 font-medium text-sm">
+                          {participant.email.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="text-gray-900">{participant.email}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={prevStep}
+                  className="flex-1 py-3 px-4 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Back to Suggestions
+                </button>
+                <button
+                  onClick={() => {
+                    // Create a booking object and call handleBook
+                    const booking = {
+                      title: 'Team Meeting',
+                      description: 'Meeting scheduled via TimeSyncAI',
+                      location: 'Virtual Meeting',
+                      startTime: selectedSuggestion.startISO,
+                      endTime: selectedSuggestion.endISO
+                    };
+                    handleBook(booking);
+                  }}
+                  className="flex-1 py-3 px-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  Send Invites & Book Meeting
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Sticky Primary CTA */}
-      <div className="fixed bottom-6 right-6">
-        {getPrimaryCTAState() === 'create-link' && (
+      {/* Sticky Primary CTA - Only show for create link flow */}
+      {currentStep === 'who' && participants.length === 0 && (
+        <div className="fixed bottom-6 right-6">
           <button
             onClick={createInviteLink}
             disabled={isCreatingLink}
@@ -921,44 +1233,9 @@ export default function PlanMeeting() {
               </>
             )}
           </button>
-        )}
-        
-        {getPrimaryCTAState() === 'get-suggestions' && (
-          <button
-            onClick={getSuggestions}
-            disabled={isLoadingSuggestions || participants.length === 0}
-            className="btn-primary text-lg px-8 py-4 shadow-lg"
-          >
-            {isLoadingSuggestions ? (
-              <>
-                <Loader size="sm" />
-                <span>Getting suggestions...</span>
-              </>
-            ) : (
-              <>
-                <Star className="h-5 w-5" />
-                <span>Get AI suggestions</span>
-              </>
-            )}
-          </button>
-        )}
-        
-        {getPrimaryCTAState() === 'book' && (
-          <div className="text-center">
-            <p className="text-sm text-gray-600 mb-2">Click "Book" on any suggestion above</p>
-          </div>
-        )}
-      </div>
-
-      {/* Booking Modal */}
-      {selectedSuggestion && (
-        <BookingModal
-          suggestion={selectedSuggestion}
-          attendees={participants.map(p => p.email)}
-          onClose={() => setSelectedSuggestion(null)}
-          onConfirm={handleBook}
-        />
+        </div>
       )}
+
     </div>
   );
 }
