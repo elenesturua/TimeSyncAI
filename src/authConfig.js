@@ -55,12 +55,13 @@ export const loginRequest = {
         'openid',
         'profile',
         'offline_access',
+        'User.Read',
         'Calendars.Read',
         'Calendars.ReadWrite'
     ],
-    prompt: 'select_account', // Forces account selection screen
+    prompt: 'consent', // Forces consent screen to grant permissions
     extraQueryParameters: {
-        'prompt': 'select_account' // Additional parameter to ensure account picker
+        'prompt': 'consent' // Additional parameter to ensure consent screen
     }
 };
 
@@ -69,6 +70,6 @@ export const loginRequest = {
  * between applications by providing a "login_hint" property.
  */
 export const silentRequest = {
-    scopes: ['openid', 'profile', 'Calendars.Read', 'Calendars.ReadWrite'],
+    scopes: ['openid', 'profile', 'offline_access', 'User.Read', 'Calendars.Read', 'Calendars.ReadWrite'],
     loginHint: 'example@domain.net',
 };

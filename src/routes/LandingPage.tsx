@@ -2,27 +2,81 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, LogIn } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '@/authConfig';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { instance, accounts } = useMsal();
+  const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = accounts.length > 0;
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
-  // Redirect authenticated users to plan meeting page
+  // Debug logging
+  console.log('LandingPage - Accounts:', accounts.length);
+  console.log('LandingPage - Is Authenticated:', isAuthenticated);
+  console.log('LandingPage - In Progress:', inProgress);
+  console.log('LandingPage - Is Redirecting:', isRedirecting);
+  console.log('LandingPage - Has Redirected:', hasRedirected);
+
+  // Handle redirect processing
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/plan');
+    console.log('LandingPage useEffect - inProgress:', inProgress, 'isAuthenticated:', isAuthenticated);
+    
+    // If MSAL is processing a redirect, show loading
+    if (inProgress === 'handleRedirect') {
+      console.log('LandingPage - Setting redirecting to true');
+      setIsRedirecting(true);
+    } else if (inProgress === 'none') {
+      // Redirect is complete
+      console.log('LandingPage - Setting redirecting to false');
+      setIsRedirecting(false);
+      
+      // If user is authenticated, redirect with small delay
+      if (isAuthenticated && !hasRedirected) {
+        console.log('LandingPage - User authenticated, redirecting to /plan');
+        setHasRedirected(true);
+        setTimeout(() => {
+          console.log('LandingPage - Executing redirect to /plan');
+          window.location.href = '/plan';
+        }, 100);
+      }
     }
-  }, [isAuthenticated, navigate]);
+  }, [inProgress, isAuthenticated, navigate, hasRedirected]);
 
   const handleLoginRedirect = () => {
-    instance.loginRedirect(loginRequest).catch((error) => console.log(error));
+    setIsRedirecting(true);
+    instance.loginRedirect(loginRequest).catch((error) => {
+      console.log(error);
+      setIsRedirecting(false);
+    });
   };
 
-  // Don't render anything if redirecting
-  if (isAuthenticated) {
-    return null;
+  // Show loading during redirect processing
+  if (isRedirecting || inProgress === 'handleRedirect') {
+    console.log('LandingPage - Showing loading screen');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-500 mx-auto mb-4"></div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-2">Signing you in...</h2>
+          <p className="text-gray-600">Please wait while we redirect you to Outlook</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render login page if authenticated or has redirected
+  if (isAuthenticated || hasRedirected) {
+    console.log('LandingPage - User is authenticated or has redirected, showing redirect screen');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-500 mx-auto mb-4"></div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-2">Welcome back!</h2>
+          <p className="text-gray-600">Taking you to your dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
