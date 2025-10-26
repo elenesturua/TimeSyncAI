@@ -69,10 +69,9 @@ export default function PlanMeeting() {
   
   // Groups state
   const [groups, setGroups] = useState<Group[]>([]);
-  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [_isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [showGroupsDropdown, setShowGroupsDropdown] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [isLoadingFromGroupUrl, setIsLoadingFromGroupUrl] = useState(false);
 
   // Step navigation functions
   const nextStep = () => {
