@@ -263,16 +263,16 @@ export default function PlanMeeting() {
     
     setIsCreatingMeeting(true);
     try {
-      // The ISO strings from the scheduler are in local time already
-      // Need to ensure they're interpreted correctly
-      const startDate = new Date(suggestion.startISO);
-      const endDate = new Date(suggestion.endISO);
+      // Parse local time ISO strings (format: YYYY-MM-DDTHH:MM:SS)
+      // Add 'Z' to make them UTC, then convert to Date objects
+      const startDate = new Date(suggestion.startISO + 'Z');
+      const endDate = new Date(suggestion.endISO + 'Z');
       
       console.log('📧 Sending invitations with meeting time:', {
         startISO_original: suggestion.startISO,
         endISO_original: suggestion.endISO,
-        startTime_display: startDate.toLocaleString('en-US', { timeZone: 'America/Chicago' }),
-        endTime_display: endDate.toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        startTime_display: startDate.toLocaleString('en-US'),
+        endTime_display: endDate.toLocaleString('en-US'),
         duration: `${duration} minutes`
       });
 
@@ -1565,8 +1565,9 @@ export default function PlanMeeting() {
                 <h3 className="font-semibold text-primary-900 mb-2">Selected Meeting Time</h3>
                 <p className="text-primary-700">
                   {(() => {
-                    const startDate = new Date(selectedSuggestion.startISO);
-                    const endDate = new Date(selectedSuggestion.endISO);
+                    // Parse local time ISO strings (without Z)
+                    const startDate = new Date(selectedSuggestion.startISO + 'Z');
+                    const endDate = new Date(selectedSuggestion.endISO + 'Z');
                     // When parsing UTC ISO strings, we need to add back the offset
                     // If the time shows as UTC (5 hours ahead), we need to display local time
                     return `${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
