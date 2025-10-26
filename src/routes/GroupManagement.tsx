@@ -6,7 +6,6 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { ParticipantGroup, User as FirestoreUser } from '@/types/firestore';
 import { testFirebaseConnection } from '@/utils/firebaseTest';
-import { InvitationService } from '@/services/invitationService';
 
 interface Participant {
   email: string;
@@ -177,30 +176,7 @@ export default function GroupManagement() {
         currentUserId: currentUser.id
       });
       
-      // First, try to send invitations to all participants
-      console.log('📧 Sending invitations to participants...');
-      const invitationPromises = newGroupParticipants.map(async (participant, index) => {
-        console.log(`📧 Sending invitation ${index + 1}/${newGroupParticipants.length} to:`, participant.email);
-        try {
-          // Create invitation first (this will try to send email)
-          const invitationId = await InvitationService.createGroupInvitation(
-            'temp-group-id', // Temporary ID, will be updated after group creation
-            currentUser.id,
-            participant.email
-          );
-          console.log(`✅ Invitation sent to ${participant.email}, ID:`, invitationId);
-          return invitationId;
-        } catch (error) {
-          console.error(`❌ Failed to send invitation to ${participant.email}:`, error);
-          throw error;
-        }
-      });
-      
-      console.log('⏳ Waiting for all invitations to be sent...');
-      await Promise.all(invitationPromises);
-      console.log('✅ All invitations sent successfully!');
-      
-      // Only create the group if all invitations were sent successfully
+      // Create the group first in Firestore
       const groupData: Omit<ParticipantGroup, 'id'> = {
         ownerId: currentUser.id,
         name: newGroupName.trim(),
@@ -229,7 +205,8 @@ export default function GroupManagement() {
       console.error('❌ Error stack:', (error as Error).stack);
       
       // Show user-friendly error message
-      alert('Failed to create group. Please check your email configuration and try again.');
+      alert('Failed to create group. Please try again.');
+      console.error('Full error object:', error);
     } finally {
       setIsCreatingGroup(false);
     }
