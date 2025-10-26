@@ -263,20 +263,18 @@ export default function PlanMeeting() {
     
     setIsCreatingMeeting(true);
     try {
-      // suggestion.startISO and endISO are already in UTC-5 format
-      // We need to convert them to proper UTC for the backend
-      const startUTC = new Date(suggestion.startISO);
-      startUTC.setHours(startUTC.getHours() + 5); // Convert from UTC-5 to UTC
-      const endUTC = new Date(suggestion.endISO);
-      endUTC.setHours(endUTC.getHours() + 5); // Convert from UTC-5 to UTC
+      // suggestion.startISO and endISO are in UTC format (from toISOString())
+      // They need to be sent as UTC for proper calendar invite handling
+      // The backend will handle timezone conversion for display
+      const startUTC = suggestion.startISO; // Already UTC
+      const endUTC = suggestion.endISO; // Already UTC
       
       console.log('📧 Sending invitations with meeting time:', {
-        startISO_original: suggestion.startISO,
-        endISO_original: suggestion.endISO,
-        startUTC_converted: startUTC.toISOString(),
-        endUTC_converted: endUTC.toISOString(),
+        startISO: suggestion.startISO,
+        endISO: suggestion.endISO,
         startTime_local: new Date(suggestion.startISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
-        endTime_local: new Date(suggestion.endISO).toLocaleString('en-US', { timeZone: 'America/Chicago' })
+        endTime_local: new Date(suggestion.endISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        duration: `${duration} minutes`
       });
 
       const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -292,8 +290,8 @@ export default function PlanMeeting() {
             title: 'Team Meeting',
             description: 'Meeting scheduled via TimeSyncAI',
             location: 'Virtual Meeting',
-            startISO: startUTC.toISOString(),
-            endISO: endUTC.toISOString(),
+            startISO: startUTC,
+            endISO: endUTC,
             timezone: 'America/Chicago'
           }
         };
