@@ -30,12 +30,12 @@ interface Suggestion {
 
 export class AISchedulingService {
   /**
-   * Generate AI-powered meeting suggestions
+   * Generate AI-powered meeting suggestions - returns ALL slots
    */
   static async generateAISuggestions(
     request: PlanMeetingRequest,
     msalInstance: IPublicClientApplication
-  ): Promise<Suggestion[]> {
+  ): Promise<{ suggestions: Suggestion[], allSlots: ScoredTimeInterval[] }> {
     try {
       console.log('Starting AI suggestion generation for:', request.participants.map(p => p.email));
       
@@ -69,10 +69,10 @@ export class AISchedulingService {
       const suggestions = this.convertToSuggestions(scoredSlots, request.participants);
       console.log(`Converted to ${suggestions.length} UI suggestions`);
       
-      return suggestions;
+      return { suggestions, allSlots: scoredSlots };
     } catch (error) {
       console.error('Error generating AI suggestions:', error);
-      return [];
+      return { suggestions: [], allSlots: [] };
     }
   }
 

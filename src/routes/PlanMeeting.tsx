@@ -14,6 +14,7 @@ import { CalendarService } from '@/services/calendarService';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, getDocs, getDoc, query, where } from 'firebase/firestore';
 import { Meeting, User as FirestoreUser, ParticipantGroup } from '@/types/firestore';
+import type { ScoredTimeInterval } from '@/logic/schedule/scheduler';
 
 interface Participant {
   email: string;
@@ -50,6 +51,7 @@ export default function PlanMeeting() {
   const [customHours, setCustomHours] = useState({ start: '09:00', end: '17:00' });
   const [allowAbsences, setAllowAbsences] = useState(0);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [allAvailableSlots, setAllAvailableSlots] = useState<ScoredTimeInterval[]>([]);
   const [_isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
@@ -463,8 +465,8 @@ export default function PlanMeeting() {
         if (!newMeetingId) return;
       }
       
-      // Generate AI-powered suggestions using scheduler.ts then selector.ts
-      const aiSuggestions = await AISchedulingService.generateAISuggestions(
+      // Generate AI-powered suggestions
+      const result = await AISchedulingService.generateAISuggestions(
         {
           participants: participants.map(p => ({
             email: p.email,
@@ -482,13 +484,17 @@ export default function PlanMeeting() {
         instance as any
       );
       
-      // Always use real AI suggestions based on participant calendars
-      // No mock data fallback
-      if (aiSuggestions.length > 0) {
-        setSuggestions(aiSuggestions);
+      // Only show top 3 initially (rest will be available via chat)
+      const top3Suggestions = result.suggestions.slice(0, 3);
+      
+      if (top3Suggestions.length > 0) {
+        setSuggestions(top3Suggestions);
+        setAllAvailableSlots(result.allSlots);
+        console.log(`Showing top 3 suggestions. ${result.suggestions.length - 3} more available via chat`);
       } else {
         console.warn('No suggestions generated from AI scheduler');
         setSuggestions([]);
+        setAllAvailableSlots([]);
       }
       
     } catch (error) {
@@ -1227,7 +1233,7 @@ export default function PlanMeeting() {
                 {/* AI Chat Interface */}
                 <div>
                   <AIChatInterface
-                    allSlots={[]} // TODO: Pass actual scored slots
+                    allSlots={allAvailableSlots}
                     currentSuggestions={suggestions}
                     onSuggestionsUpdate={(newSuggestions) => {
                       setSuggestions(newSuggestions);
