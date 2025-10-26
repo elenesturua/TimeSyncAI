@@ -96,11 +96,11 @@ export const getCalendarEvents = async (
         ...event,
         start: {
           dateTime: convertToUTC5(event.start.dateTime),
-          timeZone: 'America/New_York' // UTC-5 (EST)
+          timeZone: 'America/Chicago' // UTC-5
         },
         end: {
           dateTime: convertToUTC5(event.end.dateTime),
-          timeZone: 'America/New_York'
+          timeZone: 'America/Chicago' // UTC-5
         }
       };
     });

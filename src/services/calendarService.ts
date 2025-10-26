@@ -57,11 +57,11 @@ export class CalendarService {
         subject: event.subject || 'No Subject',
         start: {
           dateTime: startDateTime,
-          timeZone: 'America/New_York' // UTC-5 (EST)
+          timeZone: 'America/Chicago' // UTC-5
         },
         end: {
           dateTime: endDateTime,
-          timeZone: 'America/New_York' // UTC-5 (EST)
+          timeZone: 'America/Chicago' // UTC-5
         },
         isAllDay: event.isAllDay || false,
         showAs: event.showAs || 'busy',
