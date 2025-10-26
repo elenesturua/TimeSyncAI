@@ -50,9 +50,10 @@ export class InvitationService {
     const invitationLink = `${baseUrl}/invite/${token}`;
     
     try {
-      // Call local backend server
-      const backendUrl = 'http://localhost:3001/api/send-invite';
-      console.log('🔗 Calling backend API:', backendUrl);
+      // Call Vercel serverless function (works in both dev and production)
+      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const backendUrl = isDevelopment ? 'http://localhost:3001/api/send-invite' : '/api/send-invite';
+      console.log('🔗 Calling API:', backendUrl);
       console.log('📧 Sending invitation to:', email);
       console.log('🔗 Invitation link:', invitationLink);
       
