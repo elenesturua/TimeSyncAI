@@ -355,30 +355,41 @@ export class User {
   ): TimeInterval[] {
     const slots: TimeInterval[] = [];
     
-    console.log(`🎯 Generating slots for ${date.toISOString().split('T')[0]} from ${startHour}:00 to ${endHour}:00 UTC`);
+    console.log(`🎯 Generating slots for ${date.toISOString().split('T')[0]} from ${startHour}:00 to ${endHour}:00 Chicago time`);
     
-    // Generate slots as UTC times
-    // Convert Chicago time hours to UTC (add 6 hours for CDT, 5 hours for CST)
-    // For example: 12:00 PM Chicago = 5:00 PM UTC (or 6:00 PM during daylight saving)
-    const utcStartHour = startHour + 5; // Add 5 hours (assumes CST, adjust for DST if needed)
-    const utcEndHour = endHour + 5;
+    // startHour and endHour are in Chicago time
+    // We need to create UTC Date objects that represent these Chicago times
+    // For example: 12:00 PM Chicago should be stored as a UTC time that displays as 12:00 PM when converted to Chicago
     
-    for (let hour = utcStartHour; hour < utcEndHour; hour++) {
+    // Get the date in Chicago timezone
+    const chicagoDateStr = date.toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+    const [year, month, day] = chicagoDateStr.split('-').map(Number);
+    
+    for (let hour = startHour; hour < endHour; hour++) {
       for (let minute = 0; minute < 60; minute += 5) {
-        const slotStart = new Date(date);
-        slotStart.setUTCHours(hour, minute, 0, 0);
+        // startHour and endHour are already in Chicago time - just use them directly
+        const chicagoTime = new Date(year, month - 1, day, hour, minute);
         
-        const slotEnd = new Date(slotStart);
-        slotEnd.setUTCMinutes(slotEnd.getUTCMinutes() + meetingDurationMinutes);
+        // Get what this time would be in Chicago timezone
+        const chicagoTimeString = new Date(chicagoTime.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+        
+        // Calculate offset between local system time and Chicago time
+        const offsetMs = chicagoTime.getTime() - chicagoTimeString.getTime();
+        
+        // Create the slot in local time, then adjust to Chicago time
+        const slotStart = new Date(year, month - 1, day, hour, minute);
+        const adjustedSlotStart = new Date(slotStart.getTime() + offsetMs);
+        
+        const slotEnd = new Date(adjustedSlotStart.getTime() + meetingDurationMinutes * 60 * 1000);
         
         slots.push({
-          start: slotStart,
+          start: adjustedSlotStart,
           end: slotEnd
         });
       }
     }
     
-    console.log(`✅ Generated ${slots.length} slots in UTC`);
+    console.log(`✅ Generated ${slots.length} slots in Chicago time`);
     
     return slots;
   }
