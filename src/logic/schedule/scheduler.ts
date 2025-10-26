@@ -355,7 +355,7 @@ export class User {
   ): TimeInterval[] {
     const slots: TimeInterval[] = [];
     
-    // Create a new date object for the specific day
+    // Create a new date object for the specific day using local time
     const dayDate = new Date(date);
     dayDate.setHours(0, 0, 0, 0);
     
