@@ -1565,11 +1565,10 @@ export default function PlanMeeting() {
                 <h3 className="font-semibold text-primary-900 mb-2">Selected Meeting Time</h3>
                 <p className="text-primary-700">
                   {(() => {
-                    // Parse local time ISO strings (format: YYYY-MM-DDTHH:MM:SS)
+                    // Parse Chicago time ISO strings (format: YYYY-MM-DDTHH:MM:SS)
+                    // These are already in Chicago time, just parse them
                     const startDate = new Date(selectedSuggestion.startISO.replace('T', ' '));
                     const endDate = new Date(selectedSuggestion.endISO.replace('T', ' '));
-                    // When parsing UTC ISO strings, we need to add back the offset
-                    // If the time shows as UTC (5 hours ahead), we need to display local time
                     return `${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
                   })()}
                 </p>

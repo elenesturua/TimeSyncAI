@@ -243,19 +243,22 @@ export class AISchedulingService {
     participants: PlanMeetingRequest['participants']
   ): Suggestion[] {
     return scoredSlots.slice(0, 10).map((slot: any) => {
-      // Format dates as local time ISO strings (YYYY-MM-DDTHH:MM:SS without Z)
-      const formatLocalISO = (date: Date): string => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const seconds = String(date.getSeconds()).padStart(2, '0');
+      // Format dates as ISO strings in Chicago time (America/Chicago timezone)
+      // This ensures all times are consistently in the same timezone
+      const formatChicagoISO = (date: Date): string => {
+        // Convert to Chicago time zone
+        const chicagoDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+        const year = chicagoDate.getFullYear();
+        const month = String(chicagoDate.getMonth() + 1).padStart(2, '0');
+        const day = String(chicagoDate.getDate()).padStart(2, '0');
+        const hours = String(chicagoDate.getHours()).padStart(2, '0');
+        const minutes = String(chicagoDate.getMinutes()).padStart(2, '0');
+        const seconds = String(chicagoDate.getSeconds()).padStart(2, '0');
         return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
       };
       
-      const startISO = formatLocalISO(slot.start);
-      const endISO = formatLocalISO(slot.end);
+      const startISO = formatChicagoISO(slot.start);
+      const endISO = formatChicagoISO(slot.end);
       
       return {
         startISO,
