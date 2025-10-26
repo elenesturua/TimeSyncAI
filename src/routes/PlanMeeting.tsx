@@ -10,6 +10,7 @@ import { type Group } from '@/lib/api';
 import { createGraphClient, getUserProfile, getCalendarEvents, type CalendarEvent } from '@/lib/graphApi';
 import { InvitationService } from '@/services/invitationService';
 import { AISchedulingService } from '@/services/aiSchedulingService';
+import { CalendarService } from '@/services/calendarService';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, getDocs, getDoc, query, where } from 'firebase/firestore';
 import { Meeting, User as FirestoreUser, ParticipantGroup } from '@/types/firestore';
@@ -556,28 +557,37 @@ export default function PlanMeeting() {
       const profile = await getUserProfile(graphClient);
       setUserProfile(profile);
       
-      // Get calendar events for next 7 days
-      const startDate = new Date();
-      const endDate = new Date();
-      endDate.setDate(startDate.getDate() + 7);
+      // Get calendar events for the specified date range (from dateRange state)
+      const startDate = dateRange.start ? new Date(dateRange.start) : new Date();
+      const endDate = dateRange.end ? new Date(dateRange.end) : new Date();
+      
+      // Fallback to next 7 days if no date range is set
+      if (!dateRange.start || !dateRange.end) {
+        endDate.setDate(startDate.getDate() + 7);
+      }
       
       const events = await getCalendarEvents(graphClient, startDate, endDate);
       setCalendarEvents(events);
       
+      // Store calendar events in Firestore for scheduler to use
+      if (currentUser) {
+        await CalendarService.syncUserCalendar(currentUser.id, instance as any);
+        console.log(`Stored ${events.length} calendar events in Firestore for user ${currentUser.id}`);
+      }
+      
       setIsCalendarConnected(true);
       
       console.log('Calendar connected successfully!');
-      console.log('User profile:', profile);
-      console.log('Calendar events:', events);
+      console.log(`Fetched ${events.length} calendar events for date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
       
       // Debug: Show calendar events in UI
       if (events.length > 0) {
         console.log('📅 Calendar Events Found:');
-        events.forEach((event, index) => {
+        events.slice(0, 10).forEach((event, index) => {
           console.log(`${index + 1}. ${event.subject} - ${event.start.dateTime} to ${event.end.dateTime}`);
         });
       } else {
-        console.log('📅 No calendar events found in the next 7 days');
+        console.log('📅 No calendar events found in the specified date range');
       }
       
     } catch (error) {
