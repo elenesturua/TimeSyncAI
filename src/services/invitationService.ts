@@ -5,7 +5,8 @@ import {
   updateDoc, 
   query, 
   where, 
-  getDocs
+  getDocs,
+  getDoc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { MeetingInvitation } from '../types/firestore';
@@ -131,12 +132,41 @@ export class InvitationService {
     invitationId: string, 
     inviteeId: string
   ): Promise<void> {
+    // Get the invitation data
+    const invitationDoc = await getDoc(doc(db, 'invitations', invitationId));
+    const invitationData = invitationDoc.data();
+    
+    if (!invitationData) {
+      throw new Error('Invitation not found');
+    }
+    
+    const groupId = invitationData.meetingId || invitationData.groupId;
+    
+    if (!groupId) {
+      throw new Error('Group ID not found in invitation');
+    }
+    
+    // Update invitation status
     const invitationRef = doc(db, 'invitations', invitationId);
     await updateDoc(invitationRef, {
       inviteeId,
       status: 'accepted',
       acceptedAt: new Date().toISOString(),
     });
+    
+    // Add user to group's participants
+    const groupRef = doc(db, 'participantGroups', groupId);
+    const groupDoc = await getDoc(groupRef);
+    const groupData = groupDoc.data();
+    const currentParticipants = groupData?.participants || [];
+    
+    if (!currentParticipants.includes(inviteeId)) {
+      await updateDoc(groupRef, {
+        participants: [...currentParticipants, inviteeId],
+        updatedAt: new Date().toISOString(),
+      });
+      console.log('✅ User added to group participants');
+    }
   }
 
   // Get pending invitations for a user
