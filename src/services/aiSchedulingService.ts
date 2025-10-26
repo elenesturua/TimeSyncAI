@@ -1,6 +1,8 @@
 import { type IPublicClientApplication } from '@azure/msal-browser';
 import { generateScoredSlots } from '@/logic/gemini-selection/selector';
-import { createGraphClient, getCalendarEvents } from '@/lib/graphApi';
+import { CalendarService } from '@/services/calendarService';
+import { query, collection, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import type { ParticipantInput } from '@/logic/gemini-selection/selector';
 import type { ScoredTimeInterval } from '@/logic/schedule/scheduler';
 
@@ -76,60 +78,76 @@ export class AISchedulingService {
 
   /**
    * Fetch calendar events for all participants (only free/busy times)
-   * For each participant, fetch their calendar from Microsoft Graph
+   * Uses Firestore-stored calendar data from CalendarService
    */
   private static async fetchParticipantCalendars(
     participants: PlanMeetingRequest['participants'],
     startDate: string,
     endDate: string,
-    msalInstance: IPublicClientApplication
+    _msalInstance: IPublicClientApplication
   ): Promise<ParticipantInput[]> {
-    console.log(`Fetching calendars for ${participants.length} participants`);
+    console.log(`Fetching calendars for ${participants.length} participants from Firestore`);
     
     // Fetch calendars in parallel for efficiency
     const calendarPromises = participants.map(async (participant) => {
       try {
-        const account = msalInstance.getActiveAccount();
-        if (!account) {
-          console.error('No active account for participant:', participant.email);
-          throw new Error('No active account');
-        }
-
-        // Get calendar events (only free/busy, not details)
-        const graphClient = createGraphClient(msalInstance);
-        
-        console.log(`Fetching calendar for participant: ${participant.email}`);
-        
-        const events = await getCalendarEvents(
-          graphClient,
-          new Date(startDate),
-          new Date(endDate)
+        // First, try to get user ID from Firestore
+        const userQuery = query(
+          collection(db, 'users'),
+          where('email', '==', participant.email)
         );
+        
+        const userSnapshot = await getDocs(userQuery);
+        
+        if (!userSnapshot.empty) {
+          const userId = userSnapshot.docs[0].id;
+          
+          // Get calendar events from Firestore
+          const events = await CalendarService.getCalendarEvents(
+            userId,
+            new Date(startDate),
+            new Date(endDate)
+          );
 
-        console.log(`Found ${events.length} total events for ${participant.email}`);
+          console.log(`Found ${events.length} Firestore events for ${participant.email}`);
 
-        // Convert to busy windows (exclude 'free' events)
-        const busy = events
-          .filter(event => event.showAs !== 'free')
-          .map(event => ({
-            startISO: event.start.dateTime,
-            endISO: event.end.dateTime
-          }));
+          // Convert to busy windows (exclude 'free' events)
+          const busy = events
+            .filter(event => event.showAs !== 'free')
+            .map(event => ({
+              startISO: event.start.dateTime,
+              endISO: event.end.dateTime
+            }));
 
-        console.log(`Extracted ${busy.length} busy periods for ${participant.email}`);
+          console.log(`Extracted ${busy.length} busy periods for ${participant.email}`);
 
-        return {
-          id: participant.email,
-          name: participant.name,
-          priority: participant.importance || 'Mid',
-          busy,
-          workingTime: {
-            startHour: 9, // Default - could be from user preferences
-            endHour: 17,
-            workingDays: [1, 2, 3, 4, 5], // Mon-Fri
-            timezone: 'UTC'
-          }
-        };
+          return {
+            id: participant.email,
+            name: participant.name,
+            priority: participant.importance || 'Mid',
+            busy,
+            workingTime: {
+              startHour: 9, // Default - could be from user preferences
+              endHour: 17,
+              workingDays: [1, 2, 3, 4, 5], // Mon-Fri
+              timezone: 'UTC'
+            }
+          };
+        } else {
+          console.warn(`No Firestore user found for ${participant.email}, returning empty schedule`);
+          return {
+            id: participant.email,
+            name: participant.name,
+            priority: participant.importance || 'Mid',
+            busy: [],
+            workingTime: {
+              startHour: 9,
+              endHour: 17,
+              workingDays: [1, 2, 3, 4, 5],
+              timezone: 'UTC'
+            }
+          };
+        }
       } catch (error) {
         console.error(`Error fetching calendar for ${participant.email}:`, error);
         // Return empty busy schedule if fetch fails
