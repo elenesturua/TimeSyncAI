@@ -116,7 +116,6 @@ export class AISchedulingService {
           }
 
           // Convert to busy windows (exclude 'free' events)
-          // Note: event.start and event.end are objects with dateTime and timeZone
           const busy = events
             .filter(event => event.showAs !== 'free')
             .map(event => {
