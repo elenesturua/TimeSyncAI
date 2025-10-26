@@ -35,10 +35,10 @@ export default function LandingPage() {
       if (isAuthenticated && !hasRedirected) {
         console.log('LandingPage - User authenticated, redirecting to /plan');
         setHasRedirected(true);
-        setTimeout(() => {
-          console.log('LandingPage - Executing redirect to /plan');
-          window.location.href = '/plan';
-        }, 100);
+                 setTimeout(() => {
+                   console.log('LandingPage - Executing redirect to /groups');
+                   window.location.href = '/groups';
+                 }, 100);
       }
     }
   }, [inProgress, isAuthenticated, navigate, hasRedirected]);

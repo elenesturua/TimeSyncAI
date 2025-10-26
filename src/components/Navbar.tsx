@@ -35,16 +35,16 @@ export default function Navbar() {
           {isAuthenticated ? (
             <>
               <Link
+                to="/groups"
+                className={`${isLandingPage ? 'text-white hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'} px-3 py-2 rounded-lg hover:bg-white/10 transition-colors`}
+              >
+                My Groups
+              </Link>
+              <Link
                 to="/plan"
                 className={`${isLandingPage ? 'text-white hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'} px-3 py-2 rounded-lg hover:bg-white/10 transition-colors`}
               >
                 Plan Meeting
-              </Link>
-              <Link
-                to="/groups"
-                className={`${isLandingPage ? 'text-white hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'} px-3 py-2 rounded-lg hover:bg-white/10 transition-colors`}
-              >
-                Groups
               </Link>
               <Link
                 to="/profile"
