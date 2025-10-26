@@ -355,62 +355,32 @@ export class User {
   ): TimeInterval[] {
     const slots: TimeInterval[] = [];
     
-    // Get the date string in Chicago timezone (YYYY-MM-DD)
-    const chicagoDateStr = date.toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }); // en-CA gives YYYY-MM-DD format
+    console.log(`🎯 Generating slots for ${date.toISOString().split('T')[0]} from ${startHour}:00 to ${endHour}:00 UTC`);
     
-    // Create a date string for midnight in Chicago: YYYY-MM-DD
-    const [year, month, day] = chicagoDateStr.split('-').map(Number);
+    // Generate slots as UTC times
+    // Convert Chicago time hours to UTC (add 6 hours for CDT, 5 hours for CST)
+    // For example: 12:00 PM Chicago = 5:00 PM UTC (or 6:00 PM during daylight saving)
+    const utcStartHour = startHour + 5; // Add 5 hours (assumes CST, adjust for DST if needed)
+    const utcEndHour = endHour + 5;
     
-    // Generate slots from startHour to endHour in Chicago time
-    for (let hour = startHour; hour < endHour; hour++) {
+    for (let hour = utcStartHour; hour < utcEndHour; hour++) {
       for (let minute = 0; minute < 60; minute += 5) {
-        // Create date string for Chicago time
-        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+        const slotStart = new Date(date);
+        slotStart.setUTCHours(hour, minute, 0, 0);
         
-        // Parse as if it's Chicago local time
-        // Need to construct a Date object that represents Chicago time
-        // We'll create it by parsing the local time string and adjusting for timezone offset
-        const localSlotDate = new Date(`${dateStr}T${timeStr}`);
+        const slotEnd = new Date(slotStart);
+        slotEnd.setUTCMinutes(slotEnd.getUTCMinutes() + meetingDurationMinutes);
         
-        // Adjust for timezone difference between Chicago and current system timezone
-        const chicagoOffset = this.getTimezoneOffset('America/Chicago', localSlotDate);
-        const systemOffset = localSlotDate.getTimezoneOffset();
-        const adjustmentMinutes = (systemOffset - chicagoOffset) * 60;
-        
-        const slotStart = new Date(localSlotDate.getTime() + adjustmentMinutes * 60 * 1000);
-        const slotEnd = new Date(slotStart.getTime() + meetingDurationMinutes * 60 * 1000);
-        
-        // Check if the slot ends before the end hour
-        if (slotEnd.getHours() <= endHour || (slotEnd.getHours() === endHour && slotEnd.getMinutes() === 0)) {
-          slots.push({
-            start: slotStart,
-            end: slotEnd
-          });
-        }
+        slots.push({
+          start: slotStart,
+          end: slotEnd
+        });
       }
     }
     
-    return slots;
-  }
-  
-  private getTimezoneOffset(timeZone: string, date: Date): number {
-    const formatter = new Intl.DateTimeFormat('en', {
-      timeZone,
-      timeZoneName: 'longOffset'
-    });
-    const parts = formatter.formatToParts(date);
-    const offsetString = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT';
+    console.log(`✅ Generated ${slots.length} slots in UTC`);
     
-    // Parse offset like "GMT-06:00" or "GMT+05:00"
-    const match = offsetString.match(/GMT([+-])(\d{2}):(\d{2})/);
-    if (match) {
-      const sign = match[1] === '+' ? 1 : -1;
-      const hours = parseInt(match[2]);
-      const minutes = parseInt(match[3]);
-      return sign * (hours * 60 + minutes);
-    }
-    return 0;
+    return slots;
   }
 }
 
