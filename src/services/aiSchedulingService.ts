@@ -111,6 +111,10 @@ export class AISchedulingService {
 
           console.log(`Found ${events.length} Firestore events for ${participant.email}`);
 
+          if (events.length === 0) {
+            console.warn(`⚠️ No calendar data for ${participant.email}. They need to connect their calendar via the "Connect Calendar" button.`);
+          }
+
           // Convert to busy windows (exclude 'free' events)
           // Note: event.start and event.end are objects with dateTime and timeZone
           const busy = events
