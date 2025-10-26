@@ -1564,17 +1564,19 @@ export default function PlanMeeting() {
                 <h3 className="font-semibold text-primary-900 mb-2">Selected Meeting Time</h3>
                 <p className="text-primary-700">
                   {(() => {
-                    // Parse timezone-aware ISO strings (format: YYYY-MM-DDTHH:MM:SS±HH:MM)
+                    // Parse UTC ISO strings and display in Chicago time
                     const startDate = new Date(selectedSuggestion.startISO);
                     const endDate = new Date(selectedSuggestion.endISO);
                     
                     console.log('📅 Displaying booking confirmation:', {
                       iso_string: selectedSuggestion.startISO,
                       parsed_date: startDate.toString(),
-                      local_string: startDate.toLocaleString('en-US')
+                      chicago_string: startDate.toLocaleString('en-US', { timeZone: 'America/Chicago' })
                     });
                     
-                    return `${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+                    // Format in Chicago timezone
+                    const chicagoOptions = { timeZone: 'America/Chicago' as const };
+                    return `${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', ...chicagoOptions })}, ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...chicagoOptions })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...chicagoOptions })}`;
                   })()}
                 </p>
                 <p className="text-sm text-primary-600 mt-1">
