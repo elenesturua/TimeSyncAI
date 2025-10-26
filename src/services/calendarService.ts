@@ -62,19 +62,31 @@ export class CalendarService {
     startDate: Date,
     endDate: Date
   ): Promise<CalendarEvent[]> {
+    // Simplified query to avoid index requirement
     const q = query(
       collection(db, 'calendarEvents'),
-      where('userId', '==', userId),
-      where('start.dateTime', '>=', startDate.toISOString()),
-      where('start.dateTime', '<=', endDate.toISOString()),
-      orderBy('start.dateTime')
+      where('userId', '==', userId)
+      // Removed date range filter and orderBy to avoid needing composite index
+      // We'll filter in memory instead
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as CalendarEvent[];
+    
+    // Filter events in memory by date range
+    const events = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as CalendarEvent[];
+    
+    // Filter by date range in memory
+    const startISO = startDate.toISOString();
+    const endISO = endDate.toISOString();
+    
+    return events.filter(event => {
+      const eventStart = event.start.dateTime;
+      return eventStart >= startISO && eventStart <= endISO;
+    }).sort((a, b) => a.start.dateTime.localeCompare(b.start.dateTime));
   }
 
   // Get calendar events for multiple users

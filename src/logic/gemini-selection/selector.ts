@@ -517,7 +517,8 @@ function parseChatResponse(responseText: string, allAvailableSlots: ScoredTimeIn
  */
 export async function chatWithSchedulingAssistant(chatRequest: ChatRequest): Promise<ChatResponse> {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    // Use import.meta.env instead of process.env for Vite
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
     if (!apiKey) {
       return {
