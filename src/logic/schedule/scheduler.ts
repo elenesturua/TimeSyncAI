@@ -355,11 +355,13 @@ export class User {
   ): TimeInterval[] {
     const slots: TimeInterval[] = [];
     
-    // Create a new date object for the specific day using local time
-    const dayDate = new Date(date);
+    // Create a new date object for the specific day in Chicago time
+    // Get the date in Chicago timezone
+    const chicagoDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+    const dayDate = new Date(chicagoDate);
     dayDate.setHours(0, 0, 0, 0);
     
-    // Generate slots from startHour to endHour
+    // Generate slots from startHour to endHour in Chicago time
     for (let hour = startHour; hour < endHour; hour++) {
       for (let minute = 0; minute < 60; minute += 5) {
         const slotStart = new Date(dayDate);
