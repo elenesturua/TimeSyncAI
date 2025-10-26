@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { CheckCircle, Calendar, Eye, Save } from 'lucide-react';
+import { CheckCircle, Calendar, Save } from 'lucide-react';
 import Loader from '@/components/Loader';
 
 export default function MeetingSent() {
@@ -44,10 +44,6 @@ export default function MeetingSent() {
     } finally {
       setIsSavingGroup(false);
     }
-  };
-
-  const handleViewMeeting = () => {
-    navigate(`/meeting/${meetingData.id || 'temp-id'}`);
   };
 
   return (
@@ -104,16 +100,6 @@ export default function MeetingSent() {
 
         {/* Actions */}
         <div className="space-y-3 mb-6">
-          {isScheduledMeeting && (
-            <button
-              onClick={handleViewMeeting}
-              className="w-full flex items-center justify-center space-x-2 btn-primary"
-            >
-              <Eye className="h-4 w-4" />
-              <span>View Meeting Room</span>
-            </button>
-          )}
-
           {!isScheduledMeeting && (
             <button
               onClick={handleSaveAsGroup}

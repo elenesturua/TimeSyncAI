@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, MessageCircle, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
-import { chatWithSchedulingAssistant } from '@/logic/gemini-selection/selector';
 import type { ChatMessage } from '@/logic/gemini-selection/selector';
 
 interface AIChatInterfaceProps {
@@ -63,28 +62,41 @@ export default function AIChatInterface({
     setIsTyping(true);
 
     try {
-      // Call AI chat function
-      const response = await chatWithSchedulingAssistant({
-        message: userMessage,
-        conversationHistory: messages,
-        currentSuggestions: [],
-        allAvailableSlots: allSlots,
-        participants: [], // Will be populated from context
-        preferences: {},
-        contextNotes: ''
+      // Call AI chat function via serverless function
+      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiUrl = isDevelopment ? 'http://localhost:3001/api/chat' : '/api/chat';
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessage,
+          conversationHistory: messages,
+          currentSuggestions: [],
+          allAvailableSlots: allSlots,
+          participants: [], // Will be populated from context
+          preferences: {},
+          contextNotes: ''
+        })
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const responseData = await response.json();
 
       // Add assistant response
       const assistantMessage: ChatMessage = {
         role: 'assistant',
-        content: response.message,
+        content: responseData.message || 'I apologize, but I encountered an error. Please try asking your question again.',
         timestamp: new Date().toISOString()
       };
       setMessages(prev => [...prev, assistantMessage]);
 
       // Update suggestions if AI provided new ones
-      if (response.newSuggestions && response.newSuggestions.length > 0) {
-        const formattedSuggestions = response.newSuggestions.map(slot => ({
+      if (responseData.newSuggestions && responseData.newSuggestions.length > 0) {
+        const formattedSuggestions = responseData.newSuggestions.map((slot: any) => ({
           startISO: slot.timeslot.startISO,
           endISO: slot.timeslot.endISO,
           attendeesFree: [],
