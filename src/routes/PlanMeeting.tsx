@@ -270,10 +270,10 @@ export default function PlanMeeting() {
       console.log('📧 Sending invitations with meeting time:', {
         startISO_original: suggestion.startISO,
         endISO_original: suggestion.endISO,
-        startTime_local: new Date(suggestion.startISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
-        endTime_local: new Date(suggestion.endISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
-        startUTC_sending: startUTC.toISOString(),
-        endUTC_sending: endUTC.toISOString(),
+        // startTime_local: new Date(suggestion.startISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        // endTime_local: new Date(suggestion.endISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        // startUTC_sending: startUTC.toISOString(),
+        // endUTC_sending: endUTC.toISOString(),
         duration: `${duration} minutes`
       });
 
@@ -1565,7 +1565,7 @@ export default function PlanMeeting() {
               <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
                 <h3 className="font-semibold text-primary-900 mb-2">Selected Meeting Time</h3>
                 <p className="text-primary-700">
-                  {new Date(selectedSuggestion.startISO).toLocaleString('en-US', { timeZone: 'America/Chicago' })} - {new Date(selectedSuggestion.endISO).toLocaleString('en-US', { timeZone: 'America/Chicago' })}
+                  {new Date(selectedSuggestion.startISO).toLocaleDateString('en-US', { timeZone: 'America/Chicago', weekday: 'long', month: 'short', day: 'numeric' })}, {new Date(selectedSuggestion.startISO).toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' })} - {new Date(selectedSuggestion.endISO).toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' })}
                 </p>
                 <p className="text-sm text-primary-600 mt-1">
                   Duration: {duration} minutes • {selectedSuggestion.badges.join(', ')}
