@@ -62,15 +62,16 @@ export class InvitationService {
         to: email,
         organizerName: 'TimeSyncAI',
         organizerEmail: 'noreply@timesyncai.com',
-        plan: `You've been invited to join a participant group for meeting scheduling. Click the link below to accept the invitation and connect your calendar to help find the best meeting times for everyone.\n\nInvitation Link: ${invitationLink}`,
+        plan: `You've been invited to join a participant group for meeting scheduling.\n\nInvitation Link: ${invitationLink}\n\nPlease click the link to accept the invitation and connect your calendar to help find the best meeting times for everyone.`,
         meeting: {
-          title: 'Group Invitation - Connect Your Calendar',
-          description: 'You\'ve been invited to join a participant group for meeting scheduling. Please accept this invitation to connect your calendar and help find optimal meeting times.',
+          title: 'Group Invitation - Join TimeSyncAI',
+          description: 'You\'ve been invited to join a participant group for meeting scheduling. Please click the invitation link to accept and connect your calendar.',
           location: 'Virtual Meeting',
           startISO: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
           endISO: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(), // 1 hour duration
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        }
+        },
+        textOnly: true // Send plain text email without ICS attachment
       };
       
       console.log('📦 Email payload:', JSON.stringify(emailPayload, null, 2));

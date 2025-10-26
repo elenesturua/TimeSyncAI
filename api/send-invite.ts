@@ -21,6 +21,7 @@ const Payload = z.object({
   organizerEmail: z.string().email().optional(),
   meeting: SingleMeeting.optional(),
   options: z.array(SingleMeeting).optional(),
+  textOnly: z.boolean().optional(), // If true, don't attach ICS file
 });
 
 function toParts(iso: string, tz: string) {
@@ -133,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
 
-    if (parsed.meeting) {
+    if (parsed.meeting && !parsed.textOnly) {
       const ics = buildIcs(parsed.meeting, {
         organizerName: parsed.organizerName,
         organizerEmail,
@@ -151,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         content: ics,
         contentType: 'text/calendar; charset=utf-8; method=REQUEST',
       });
-    } else if (parsed.options?.length) {
+    } else if (parsed.options?.length && !parsed.textOnly) {
       parsed.options.forEach((opt, i) => {
         const ics = buildIcs(opt, {
           organizerName: parsed.organizerName,
@@ -171,10 +172,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           contentType: 'text/calendar; charset=utf-8; method=REQUEST',
         });
       });
-    } else {
+    } else if (!parsed.textOnly) {
+      // If textOnly is false and we have no meeting or options, return error
       return res.status(400).json({
         success: false,
-        error: "Provide either 'meeting' or 'options'.",
+        error: "Provide either 'meeting' or 'options', or set textOnly to true.",
       });
     }
 
