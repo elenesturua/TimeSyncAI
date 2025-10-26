@@ -11,7 +11,7 @@ interface TimeInterval {
 /**
  * Represents a time interval with a preference score and participant information
  */
-interface ScoredTimeInterval extends TimeInterval {
+export interface ScoredTimeInterval extends TimeInterval {
   score: number;
   midAttendance: number;
   overallAttendance: number;

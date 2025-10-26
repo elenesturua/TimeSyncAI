@@ -1,46 +1,57 @@
 
-import { NextResponse } from "next/server";
+import { Schedule, User, type ScoredTimeInterval } from '../schedule/scheduler';
 
-type Priority = "high" | "mid" | "low";
+// Types for the Gemini API integration
+type Priority = "High" | "Mid" | "Low";
 
-type Timeslot = {
-  id?: string; // optional identifier
-  startISO: Date; // ISO string
-  endISO: Date;   // ISO string
+type TimeslotInput = {
+  id?: string;
+  startISO: string;
+  endISO: string;
 };
 
-type BusyWindow = { startISO: string; endISO: string };
-
-type Participant = {
+type ParticipantInput = {
   id: string;
   name?: string;
   priority: Priority;
-  busy: BusyWindow[]; // times they are busy (closed intervals)
-  timezone?: string; // optional, for display only
+  busy: { startISO: string; endISO: string }[];
+  timezone?: string;
+  workingTime?: {
+    startHour?: number;
+    endHour?: number;
+    workingDays?: number[];
+  };
 };
 
 type Preferences = {
-  durationMinutes?: number; // desired meeting duration (fallback if timeslots don't include end)
-  // minHighPriorityPresence?: number; // fraction [0..1] required (e.g., 0.5 meaning at least half of high-priority must be present)
-  preferredStartHourRange?: { start: number; end: number } | null; // local hours (e.g., {start:9,end:17})
-  bufferMinutes?: number; // buffer before/after slot to respect (default 0)
-  avoidWeekdays?: number[]; // 0=Sunday .. 6=Saturday
-  timezone?: string; // organizer timezone for prompt/display
+  durationMinutes?: number;
+  preferredStartHourRange?: { start: number; end: number } | null;
+  bufferMinutes?: number;
+  avoidWeekdays?: number[];
+  timezone?: string;
 };
 
 type RequestBody = {
-  timeslots: Timeslot[]; // up to 10
-  participants: Participant[]; // whole meeting list; priorities important
+  timeslots?: TimeslotInput[];
+  participants: ParticipantInput[];
   preferences?: Preferences;
-  contextNotes?: string; // optional free-text that Gemini can use (e.g., goals of the meeting)
+  contextNotes?: string;
+  startDate: string; // ISO date string (YYYY-MM-DD)
+  endDate: string; // ISO date string (YYYY-MM-DD)
+  meetingDurationMinutes: number;
 };
 
 type SuggestedSlot = {
-  timeslot: Timeslot;
-  score: number; // 0..100
-  confidence: number; // 0..100
+  timeslot: {
+    id?: string;
+    startISO: string;
+    endISO: string;
+  };
+  score: number;
+  confidence: number;
   reason: string;
   suggestedAttendees?: { participantId: string; status: "suggest" | "optional" }[];
+  practicalNotes?: string[];
 };
 
 type ResponseBody = {
@@ -52,167 +63,100 @@ type ResponseBody = {
   error?: string;
 };
 
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"; // keep as-is; uses ?key= below
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
-// ---------------------- Utilities ----------------------
-function isoToDate(iso: string) {
-  return new Date(iso);
-}
-
-function overlaps(aStartISO: string, aEndISO: string, bStartISO: string, bEndISO: string) {
-  const aS = isoToDate(aStartISO).getTime();
-  const aE = isoToDate(aEndISO).getTime();
-  const bS = isoToDate(bStartISO).getTime();
-  const bE = isoToDate(bEndISO).getTime();
-  return Math.max(aS, bS) < Math.min(aE, bE);
-}
-
-function durationMinutes(slot: Timeslot, fallback = 60) {
+/**
+ * Generate scored meeting slots using the Schedule system
+ * @param body - Request body with participants and preferences
+ * @returns Promise<ScoredTimeInterval[]> - Array of scored time slots
+ */
+async function generateScoredSlots(body: RequestBody): Promise<ScoredTimeInterval[]> {
   try {
-    const s = isoToDate(slot.startISO).getTime();
-    const e = isoToDate(slot.endISO).getTime();
-    return Math.max(1, Math.round((e - s) / 60000));
-  } catch {
-    return fallback;
-  }
-}
+    // Create schedule instance
+    const startDate = new Date(body.startDate);
+    const endDate = new Date(body.endDate);
+    const schedule = new Schedule(startDate, endDate, body.meetingDurationMinutes);
 
-// returns fraction [0..1] of participants of that priority who are available in this slot
-function computeAvailabilityFractionForPriority(
-  slot: Timeslot,
-  participants: Participant[],
-  priority: Priority
-) {
-  const relevant = participants.filter((p) => p.priority === priority);
-  if (relevant.length === 0) return 1; // if none of that priority exists, treat as fully available
-  let availableCount = 0;
-  for (const p of relevant) {
-    // available if none of their busy windows overlap slot
-    const isBusy = p.busy.some((bw) => overlaps(slot.startISO, slot.endISO, bw.startISO, bw.endISO));
-    if (!isBusy) availableCount++;
-  }
-  return availableCount / relevant.length;
-}
+    // Convert participants to User objects and add to schedule
+    for (const participant of body.participants) {
+      const user = new User(
+        participant.id,
+        participant.name || participant.id,
+        participant.priority,
+        participant.workingTime
+      );
 
-// simple algorithmic scoring
-function scoreTimeslotAlgorithmic(
-  slot: Timeslot,
-  participants: Participant[],
-  prefs: Preferences | undefined
-) {
-  // weights
-  const wHigh = 4.0;
-  const wMid = 1.5;
-  const wLow = 0.8;
-
-  const highAvail = computeAvailabilityFractionForPriority(slot, participants, "high");
-  const midAvail = computeAvailabilityFractionForPriority(slot, participants, "mid");
-  const lowAvail = computeAvailabilityFractionForPriority(slot, participants, "low");
-
-  // base score
-  let score = wHigh * highAvail + wMid * midAvail + wLow * lowAvail;
-
-  // preference bonuses
-  if (prefs?.preferredStartHourRange) {
-    const startHourUTC = isoToDate(slot.startISO).getUTCHours(); // approximate (can't rely on local tz); it's okay as relative heuristic
-    const { start, end } = prefs.preferredStartHourRange;
-    // if within range (rough), add bonus
-    if (start <= startHourUTC && startHourUTC < end) score += 0.8;
-  }
-
-  // duration fit: prefer timeslots that are at least desired duration (no penalty if unknown)
-  if (prefs?.durationMinutes) {
-    const dm = durationMinutes(slot, prefs.durationMinutes);
-    if (dm >= prefs.durationMinutes) score += 0.5;
-    else score -= 0.3; // slightly penalize too-short
-  }
-
-  // avoid weekdays
-  if (Array.isArray(prefs?.avoidWeekdays) && prefs!.avoidWeekdays.length > 0) {
-    const dow = isoToDate(slot.startISO).getUTCDay();
-    if (prefs!.avoidWeekdays.includes(dow)) score -= 1.0;
-  }
-
-  // buffer: check if slot is adjacent to busy windows for high priority participants – penalize if so
-  const buffer = prefs?.bufferMinutes ?? 0;
-  if (buffer > 0) {
-    for (const p of participants.filter((x) => x.priority === "high")) {
-      for (const bw of p.busy) {
-        // if busy window ends within bufferMinutes before slot start OR starts within bufferMinutes after slot end => penalty
-        const gapBefore = isoToDate(slot.startISO).getTime() - isoToDate(bw.endISO).getTime();
-        const gapAfter = isoToDate(bw.startISO).getTime() - isoToDate(slot.endISO).getTime();
-        const gapBeforeMin = gapBefore / 60000;
-        const gapAfterMin = gapAfter / 60000;
-        if ((gapBeforeMin >= 0 && gapBeforeMin < buffer) || (gapAfterMin >= 0 && gapAfterMin < buffer)) {
-          score -= 0.6;
-        }
+      // Add busy events to user's schedule
+      for (const busyWindow of participant.busy) {
+        user.busySchedule.addEvent(
+          new Date(busyWindow.startISO),
+          new Date(busyWindow.endISO)
+        );
       }
+
+      schedule.addUser(user);
     }
+
+    // Generate scored meeting slots
+    await schedule.generateScoredMeetingSlots();
+    
+    return schedule.ScoredTimeIntervals;
+  } catch (error) {
+    console.error('Error generating scored slots:', error);
+    return [];
   }
-
-  // Map to 0..100 roughly
-  const raw = Math.max(0, score);
-  const normalized = Math.min(100, Math.round((raw / (wHigh + wMid + wLow + 2 /*bonuses*/) ) * 100));
-
-  return {
-    score: normalized,
-    rawScore: raw,
-    highAvail,
-    midAvail,
-    lowAvail,
-  };
 }
 
-// Build suggested attendees list with statuses
-function buildSuggestedAttendees(slot: Timeslot, participants: Participant[], minHighPresence: number | undefined) {
-  const suggestions: { participantId: string; status: "suggest" | "optional" }[] = [];
-  const highParticipants = participants.filter((p) => p.priority === "high");
-  // if we must enforce minHighPresence, mark some high-priority as required (suggest) if they are available
-  const requiredHighCount = Math.ceil((minHighPresence ?? 0.5) * Math.max(1, highParticipants.length));
-  let availableHigh = highParticipants.filter((p) => !p.busy.some((bw) => overlaps(slot.startISO, slot.endISO, bw.startISO, bw.endISO)));
+/**
+ * Build Gemini prompt from request body and scored time slots
+ * @param body - Request body
+ * @param scoredSlots - Pre-scored time slots from the Schedule system
+ * @returns Object with system instruction and user prompt
+ */
+function buildGeminiPrompt(body: RequestBody, scoredSlots: ScoredTimeInterval[]) {
+  const { participants, preferences, contextNotes } = body;
 
-  // mark available high as suggest
-  for (const p of participants) {
-    const isBusy = p.busy.some((bw) => overlaps(slot.startISO, slot.endISO, bw.startISO, bw.endISO));
-    if (!isBusy) {
-      if (p.priority === "high") suggestions.push({ participantId: p.id, status: "suggest" });
-      else suggestions.push({ participantId: p.id, status: "optional" });
-    } else {
-      // busy: still include as optional invite if low priority (maybe they can join late)
-      if (p.priority !== "high") suggestions.push({ participantId: p.id, status: "optional" });
-    }
-  }
-  return suggestions;
-}
-
-// ---------------------- Gemini prompt builder ----------------------
-function buildGeminiPrompt(body: RequestBody) {
-  const { timeslots, participants, preferences, contextNotes } = body;
-
-  const timeslotText = timeslots
-    .map((t) => `- id:${t.id ?? "n/a"} start:${t.startISO} end:${t.endISO} duration:${durationMinutes(t)}m`)
+  // Convert scored slots to timeslot text for prompt
+  const timeslotText = scoredSlots
+    .slice(0, 10) // Limit to top 10 slots
+    .map((slot, index) => {
+      const duration = Math.round((slot.end.getTime() - slot.start.getTime()) / 60000);
+      const availableParticipants = slot.participants.available.map((u: User) => u.userID).join(', ');
+      const unavailableParticipants = slot.participants.unavailable.map((u: User) => u.userID).join(', ');
+      
+      return `- id:slot_${index + 1} start:${slot.start.toISOString()} end:${slot.end.toISOString()} duration:${duration}m score:${slot.score.toFixed(2)} available:[${availableParticipants}] unavailable:[${unavailableParticipants}]`;
+    })
     .join("\n");
 
+  // Convert participants to text
   const participantsText = participants
-    .map(
-      (p) =>
-        `- id:${p.id} name:${p.name ?? "n/a"} priority:${p.priority} busy:[${p.busy
-          .map((b) => `${b.startISO}->${b.endISO}`)
-          .join(", ")}]`
-    )
+    .map((p) => {
+      const busyWindows = p.busy.map(b => `${b.startISO}->${b.endISO}`).join(", ");
+      const workingHours = p.workingTime 
+        ? `${p.workingTime.startHour || 9}:00-${p.workingTime.endHour || 17}:00`
+        : "9:00-17:00";
+      
+      return `- id:${p.id} name:${p.name ?? "n/a"} priority:${p.priority} busy:[${busyWindows}] workingHours:${workingHours}`;
+    })
     .join("\n");
 
   const prefsText = JSON.stringify(preferences || {}, null, 2);
 
   const systemInstruction = `
-You are an expert meeting scheduler assistant. 
-Your job: from the provided candidate timeslots (already pre-filtered to reasonable meeting windows), participant timelines, and user preferences, choose and explain the top 3 meeting times most likely to satisfy constraints and maximize presence of high-priority participants.
-Return EXACTLY a JSON object adhering to the schema requested below, and nothing else.
+You are an expert meeting scheduler assistant with advanced calendar analysis capabilities.
+Your job: analyze the provided pre-scored candidate timeslots (generated from real calendar data), participant schedules, and preferences to select and explain the top 3 meeting times that maximize attendance and satisfaction.
+
+The timeslots have already been filtered and scored based on:
+- High-priority participant availability (must be 100% available)
+- Mid-priority participant attendance rates
+- Overall attendance optimization
+- Working hours and time zone considerations
+
+Your task is to refine this selection using contextual understanding and provide clear explanations in a structured text format.
 `;
 
   const userPrompt = `
-TIMESLOTS (candidate list):
+PRE-SCORED TIMESLOTS (top candidates from calendar analysis):
 ${timeslotText}
 
 PARTICIPANTS:
@@ -224,64 +168,268 @@ ${prefsText}
 CONTEXT NOTES:
 ${contextNotes || "None"}
 
-RULES:
-1) Respect participant busy windows (they cannot attend if a busy window overlaps).
-2) Prioritize high-priority participants' availability. If a high-priority participant is unavailable in a slot, that should reduce the slot's confidence.
-3) Respect preferences like minHighPriorityPresence (fraction), preferredStartHourRange, bufferMinutes, durationMinutes.
-4) Provide three (3) suggested timeslots (choose from the provided timeslots only).
-5) For each suggestion include: timeslot (id/startISO/endISO), estimated confidence 0-100, numeric score 0-100, why you selected it (2-4 sentences), suggestedAttendees array (participantId + status 'suggest'|'optional'), and practical scheduling notes (e.g., "consider 10-min buffer", "send tentative invite to X first").
+ANALYSIS RULES:
+1) All timeslots are pre-filtered to ensure High-priority participants are available
+2) Scores reflect Mid-priority attendance (40%) + Overall attendance (60%)
+3) Consider participant working hours and time zones
+4) Factor in buffer time preferences and avoid specified weekdays
+5) Provide practical scheduling advice based on participant patterns
 
-OUTPUT SCHEMA (RETURN EXACT JSON following this shape):
-{
-  "suggestions": [
-    {
-      "timeslot": { "id":"", "startISO":"", "endISO":"" },
-      "score": number,        // 0..100
-      "confidence": number,   // 0..100
-      "reason": "string",
-      "suggestedAttendees": [ { "participantId":"", "status":"suggest"|"optional" } ],
-      "practicalNotes": [ "string" ]
-    }
-  ],
-  "explainability": "short summary explaining how scores were computed (1-3 sentences)",
-  "metadata": { "generatedAt": "ISO timestamp", "source": "gemini" }
-}
+SELECTION CRITERIA:
+1) Choose 3 timeslots that best balance high scores with practical considerations
+2) Consider meeting context and participant roles
+3) Provide clear reasoning for each selection
+4) Include actionable scheduling recommendations
 
-Now analyze the provided inputs and return JSON strictly following the schema.
+OUTPUT FORMAT:
+For each of your top 3 recommended timeslots, provide the following information in this exact structure:
+
+RECOMMENDATION 1:
+Slot ID: [slot_id]
+Start Time: [ISO timestamp]
+End Time: [ISO timestamp]
+Score: [0-100]
+Confidence: [0-100]
+Reason: [2-4 sentences explaining why this slot is optimal]
+Suggested Attendees: [list of participantId:status pairs, where status is either "suggest" or "optional"]
+Practical Notes: [actionable scheduling tips, one per line]
+
+RECOMMENDATION 2:
+[same format as above]
+
+RECOMMENDATION 3:
+[same format as above]
+
+METHODOLOGY:
+[Brief summary of your selection methodology in 1-3 sentences]
+
+Analyze the pre-scored timeslots and provide your top 3 recommendations in the exact format above.
 `;
 
   return { systemInstruction, userPrompt };
 }
 
-// ---------------------- Handler ----------------------
+/**
+ * Parse Gemini's text output into structured SuggestedSlot array
+ * @param geminiText - Raw text output from Gemini
+ * @returns Array of SuggestedSlot objects
+ */
+function parseGeminiTextOutput(geminiText: string): SuggestedSlot[] {
+  const suggestions: SuggestedSlot[] = [];
+  
+  try {
+    // Split the text into recommendation sections
+    const sections = geminiText.split(/RECOMMENDATION \d+:/);
+    
+    // Process each recommendation (skip the first empty section)
+    for (let i = 1; i <= 3 && i < sections.length; i++) {
+      const section = sections[i].trim();
+      
+      // Extract fields using regex patterns
+      const slotIdMatch = section.match(/Slot ID:\s*(.+)/);
+      const startTimeMatch = section.match(/Start Time:\s*(.+)/);
+      const endTimeMatch = section.match(/End Time:\s*(.+)/);
+      const scoreMatch = section.match(/Score:\s*(\d+)/);
+      const confidenceMatch = section.match(/Confidence:\s*(\d+)/);
+      const reasonMatch = section.match(/Reason:\s*([\s\S]+?)(?=Suggested Attendees:|$)/);
+      const attendeesMatch = section.match(/Suggested Attendees:\s*([\s\S]+?)(?=Practical Notes:|$)/);
+      const notesMatch = section.match(/Practical Notes:\s*([\s\S]+?)(?=RECOMMENDATION|METHODOLOGY|$)/);
+      
+      if (!slotIdMatch || !startTimeMatch || !endTimeMatch || !scoreMatch || !confidenceMatch) {
+        console.warn(`Missing required fields in recommendation ${i}`);
+        continue;
+      }
+      
+      // Parse suggested attendees
+      const suggestedAttendees: { participantId: string; status: "suggest" | "optional" }[] = [];
+      if (attendeesMatch) {
+        const attendeesText = attendeesMatch[1].trim();
+        // Parse format like "user1:suggest, user2:optional" or handle various formats
+        const attendeePairs = attendeesText.split(',').map(pair => pair.trim());
+        for (const pair of attendeePairs) {
+          // Handle both "user:status" and "user - status" formats
+          const colonSplit = pair.split(':');
+          const dashSplit = pair.split(' - ');
+          
+          let participantId = '';
+          let status = '';
+          
+          if (colonSplit.length === 2) {
+            [participantId, status] = colonSplit.map(s => s.trim());
+          } else if (dashSplit.length === 2) {
+            [participantId, status] = dashSplit.map(s => s.trim());
+          } else {
+            // Fallback: assume it's just a participant ID, default to "suggest"
+            participantId = pair.trim();
+            status = 'suggest';
+          }
+          
+          // Normalize status values
+          const normalizedStatus = status.toLowerCase();
+          if (participantId && (normalizedStatus === 'suggest' || normalizedStatus === 'optional')) {
+            suggestedAttendees.push({ 
+              participantId, 
+              status: normalizedStatus as "suggest" | "optional" 
+            });
+          }
+        }
+      }
+      
+      // Parse practical notes
+      const practicalNotes: string[] = [];
+      if (notesMatch) {
+        const notesText = notesMatch[1].trim();
+        // Split by lines and filter out empty lines
+        const noteLines = notesText.split('\n').map(line => line.trim()).filter(line => line);
+        practicalNotes.push(...noteLines);
+      }
+      
+      // Validate and clean the timestamps
+      const startISO = startTimeMatch[1].trim();
+      const endISO = endTimeMatch[1].trim();
+      
+      // Basic ISO timestamp validation
+      const isValidISO = (timestamp: string) => {
+        try {
+          const date = new Date(timestamp);
+          return !isNaN(date.getTime()) && timestamp.includes('T');
+        } catch {
+          return false;
+        }
+      };
+      
+      if (!isValidISO(startISO) || !isValidISO(endISO)) {
+        console.warn(`Invalid ISO timestamps in recommendation ${i}: start=${startISO}, end=${endISO}`);
+        continue;
+      }
+      
+      // Create the suggestion object
+      const suggestion: SuggestedSlot = {
+        timeslot: {
+          id: slotIdMatch[1].trim(),
+          startISO,
+          endISO
+        },
+        score: Math.max(0, Math.min(100, parseInt(scoreMatch[1]) || 0)),
+        confidence: Math.max(0, Math.min(100, parseInt(confidenceMatch[1]) || 0)),
+        reason: reasonMatch ? reasonMatch[1].trim().replace(/\s+/g, ' ') : '',
+        suggestedAttendees,
+        practicalNotes
+      };
+      
+      suggestions.push(suggestion);
+    }
+    
+  } catch (error) {
+    console.error('Error parsing Gemini text output:', error);
+  }
+  
+  return suggestions;
+}
+
+/**
+ * Convert ScoredTimeInterval to SuggestedSlot format
+ * @param scoredSlot - Scored time interval from Schedule system
+ * @param index - Index for generating slot ID
+ * @returns SuggestedSlot object
+ */
+function convertToSuggestedSlot(scoredSlot: ScoredTimeInterval, index: number): SuggestedSlot {
+  // Build suggested attendees list
+  const suggestedAttendees = [
+    ...scoredSlot.participants.available.map((user: User) => ({
+      participantId: user.userID,
+      status: user.importance === "High" ? "suggest" as const : "optional" as const
+    })),
+    ...scoredSlot.participants.unavailable.map((user: User) => ({
+      participantId: user.userID,
+      status: "optional" as const
+    }))
+  ];
+
+  // Build reason string
+  const availableCount = scoredSlot.participants.available.length;
+  const totalCount = availableCount + scoredSlot.participants.unavailable.length;
+  const attendanceRate = Math.round((availableCount / totalCount) * 100);
+  
+  const reason = `Strong attendance with ${availableCount}/${totalCount} participants available (${attendanceRate}%). ` +
+    `Mid-priority attendance: ${Math.round(scoredSlot.midAttendance * 100)}%. ` +
+    `Overall score: ${scoredSlot.score.toFixed(1)} based on priority-weighted availability.`;
+
+  return {
+    timeslot: {
+      id: `slot_${index + 1}`,
+      startISO: scoredSlot.start.toISOString(),
+      endISO: scoredSlot.end.toISOString()
+    },
+    score: Math.round(scoredSlot.score * 100), // Convert to 0-100 scale
+    confidence: Math.max(60, Math.min(95, Math.round(scoredSlot.score * 100 + 10))),
+    reason,
+    suggestedAttendees,
+    practicalNotes: [
+      "All high-priority participants are available",
+      `${Math.round(scoredSlot.overallAttendance * 100)}% overall attendance rate`,
+      "Consider sending calendar invites 24-48 hours in advance"
+    ]
+  };
+}
+
+// ---------------------- Main Handler ----------------------
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as RequestBody;
 
     // Basic validation
-    if (!body.timeslots || !Array.isArray(body.timeslots) || body.timeslots.length === 0) {
-      return NextResponse.json({ success: false, error: "No timeslots provided" }, { status: 400 });
-    }
     if (!body.participants || !Array.isArray(body.participants) || body.participants.length === 0) {
-      return NextResponse.json({ success: false, error: "No participants provided" }, { status: 400 });
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "No participants provided" 
+      }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    // Try Gemini first if key present
+    if (!body.startDate || !body.endDate || !body.meetingDurationMinutes) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "Missing required fields: startDate, endDate, meetingDurationMinutes" 
+      }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Generate scored slots using the Schedule system
+    console.log('Generating scored slots using Schedule system...');
+    const scoredSlots = await generateScoredSlots(body);
+    
+    if (scoredSlots.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "No available meeting slots found for the given constraints"
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log(`Generated ${scoredSlots.length} scored slots`);
+
+    // Try Gemini first if API key is available
     const apiKey = process.env.GEMINI_API_KEY;
-    const promptBundle = buildGeminiPrompt(body);
-
-    let geminiResult: any = null;
-    let geminiParsed: ResponseBody | null = null;
-
+    
     if (apiKey) {
       try {
+        console.log('Attempting Gemini API call...');
+        const promptBundle = buildGeminiPrompt(body, scoredSlots);
+
         const payload = {
           systemInstruction: { parts: [{ text: promptBundle.systemInstruction }] },
           contents: [{ role: "user", parts: [{ text: promptBundle.userPrompt }] }],
           generationConfig: {
-            maxOutputTokens: 2000,
-            temperature: 0.05,
-            topP: 0.95,
+            maxOutputTokens: 3000,
+            temperature: 0.1,
+            topP: 0.9,
           },
         };
 
@@ -292,101 +440,87 @@ export async function POST(request: Request) {
         });
 
         if (resp.ok) {
-          geminiResult = await resp.json();
-          // try to extract text and parse JSON (handle markdown fences)
-          const candidateText =
-            geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text ||
-            geminiResult?.candidates?.[0]?.content?.parts?.[0]?.input ||
-            "";
-
-          let jsonText = candidateText.trim();
-          if (jsonText.startsWith("```")) {
-            jsonText = jsonText.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-          }
-          const parsed = JSON.parse(jsonText);
-
-          // quick validation of parsed shape
-          if (!parsed?.suggestions || !Array.isArray(parsed.suggestions)) {
-            throw new Error("Gemini returned unexpected schema");
+          const geminiResult = await resp.json();
+          
+          // Extract text response
+          const candidateText = geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          
+          if (!candidateText.trim()) {
+            throw new Error("Gemini returned empty response");
           }
 
-          geminiParsed = {
+          console.log('Gemini API call successful, parsing text output...');
+          
+          // Parse the text output into structured suggestions
+          const parsedSuggestions = parseGeminiTextOutput(candidateText);
+          
+          if (parsedSuggestions.length === 0) {
+            throw new Error("Failed to parse any valid suggestions from Gemini output");
+          }
+
+          console.log(`Successfully parsed ${parsedSuggestions.length} suggestions from Gemini`);
+          
+          const response: ResponseBody = {
             success: true,
             source: "gemini",
-            suggestions: parsed.suggestions.map((s: any) => ({
-              timeslot: s.timeslot,
-              score: s.score,
-              confidence: s.confidence,
-              reason: s.reason,
-              suggestedAttendees: s.suggestedAttendees,
-              practicalNotes: s.practicalNotes,
-            })),
-            diagnostics: { raw: parsed },
+            suggestions: parsedSuggestions,
+            diagnostics: { 
+              totalSlotsAnalyzed: scoredSlots.length,
+              parsedSuggestions: parsedSuggestions.length,
+              rawGeminiText: candidateText
+            },
             rawModelResponse: geminiResult,
-          } as any;
+          };
 
-          // return Gemini result
-          return NextResponse.json(geminiParsed);
+          return new Response(JSON.stringify(response), {
+            headers: { 'Content-Type': 'application/json' }
+          });
         } else {
-          const text = await resp.text();
-          console.error("Gemini API failed:", resp.status, text);
+          const errorText = await resp.text();
+          console.error("Gemini API failed:", resp.status, resp.statusText, errorText);
         }
-      } catch (e) {
-        console.warn("Gemini attempt failed, falling back to algorithm:", e);
+      } catch (error) {
+        console.warn("Gemini attempt failed, falling back to algorithm:", error);
       }
     } else {
-      console.warn("GEMINI_API_KEY not set; using algorithmic fallback");
+      console.log("GEMINI_API_KEY not set; using algorithmic fallback");
     }
 
     // ------------- Algorithmic fallback -------------
-    const prefs = body.preferences ?? {};
-    const scored = body.timeslots.map((ts) => {
-      const res = scoreTimeslotAlgorithmic(ts, body.participants, prefs);
-      const suggestedAttendees = buildSuggestedAttendees(ts, body.participants, prefs?.minHighPriorityPresence);
-      // build reason string
-      const reasonParts: string[] = [];
-      reasonParts.push(
-        `High-priority availability ${Math.round(res.highAvail * 100)}%, mid ${Math.round(
-          res.midAvail * 100
-        )}%.`
-      );
-      if (prefs?.durationMinutes) {
-        reasonParts.push(`Slot supports ${prefs.durationMinutes}m meeting: ${durationMinutes(ts) >= prefs.durationMinutes}`);
-      }
-      const reason = reasonParts.join(" ");
+    console.log('Using algorithmic fallback...');
+    
+    // Convert top scored slots to suggested slots format
+    const top3Slots = scoredSlots
+      .slice(0, 3)
+      .map((slot, index) => convertToSuggestedSlot(slot, index));
 
-      return {
-        timeslot: ts,
-        score: res.score,
-        confidence: Math.max(30, Math.min(95, Math.round(res.score * 0.9 + 5))), // heuristic mapping
-        reason,
-        suggestedAttendees,
-      } as SuggestedSlot;
-    });
-
-    // pick top 3 by score
-    scored.sort((a, b) => b.score - a.score);
-    const top3 = scored.slice(0, 3);
-
-    const respBody: ResponseBody = {
+    const response: ResponseBody = {
       success: true,
-      source: apiKey ? (geminiResult ? "gemini" : "algorithm") : "algorithm",
-      suggestions: top3,
+      source: "algorithm",
+      suggestions: top3Slots,
       diagnostics: {
-        scoringDetail: scored.map((s) => ({
-          timeslot: s.timeslot,
+        totalSlotsGenerated: scoredSlots.length,
+        scoringMethod: "Schedule system with priority-weighted attendance",
+        topScores: scoredSlots.slice(0, 5).map(s => ({
+          start: s.start.toISOString(),
           score: s.score,
-        })),
-      },
-      rawModelResponse: geminiResult ?? undefined,
+          attendance: s.overallAttendance
+        }))
+      }
     };
 
-    return NextResponse.json(respBody);
+    return new Response(JSON.stringify(response), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
   } catch (error) {
     console.error("Error in schedule recommender:", error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
+    return new Response(JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
