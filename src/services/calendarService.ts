@@ -14,6 +14,14 @@ import { db } from '../lib/firebase';
 import { CalendarEvent, CalendarSync } from '../types/firestore';
 import { getCalendarEvents, createGraphClient } from '../lib/graphApi';
 
+// Helper function to convert UTC datetime string to UTC-6
+function convertToUTC6(utcDateTime: string): string {
+  const date = new Date(utcDateTime);
+  // UTC-6 is 6 hours behind UTC
+  date.setHours(date.getHours() - 6);
+  return date.toISOString();
+}
+
 export class CalendarService {
   // Store calendar events for a user
   static async storeCalendarEvents(
@@ -36,11 +44,25 @@ export class CalendarService {
     
     // Add new events
     for (const event of events) {
+      // Convert UTC times to UTC-6
+      const startDateTime = typeof event.start === 'string' 
+        ? convertToUTC6(event.start) 
+        : convertToUTC6(event.start.dateTime);
+      const endDateTime = typeof event.end === 'string'
+        ? convertToUTC6(event.end)
+        : convertToUTC6(event.end.dateTime);
+      
       const calendarEvent: Omit<CalendarEvent, 'id'> = {
         userId,
         subject: event.subject || 'No Subject',
-        start: event.start,
-        end: event.end,
+        start: {
+          dateTime: startDateTime,
+          timeZone: 'America/Chicago' // UTC-6
+        },
+        end: {
+          dateTime: endDateTime,
+          timeZone: 'America/Chicago' // UTC-6
+        },
         isAllDay: event.isAllDay || false,
         showAs: event.showAs || 'busy',
         lastUpdated: new Date().toISOString(),
