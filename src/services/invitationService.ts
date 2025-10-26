@@ -52,35 +52,48 @@ export class InvitationService {
     try {
       // Call Vercel serverless function
       const apiUrl = '/api/send-invite';
-      console.log('🔗 API URL:', apiUrl);
+      console.log('🔗 Calling Vercel API:', apiUrl);
+      console.log('📧 Sending invitation to:', email);
+      console.log('🔗 Invitation link:', invitationLink);
+      
+      const emailPayload = {
+        to: email,
+        organizerName: 'TimeSyncAI',
+        organizerEmail: 'noreply@timesyncai.com',
+        plan: `You've been invited to join a participant group for meeting scheduling. Click the link below to accept the invitation and connect your calendar to help find the best meeting times for everyone.\n\nInvitation Link: ${invitationLink}`,
+        meeting: {
+          title: 'Group Invitation - Connect Your Calendar',
+          description: 'You\'ve been invited to join a participant group for meeting scheduling. Please accept this invitation to connect your calendar and help find optimal meeting times.',
+          location: 'Virtual Meeting',
+          startISO: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+          endISO: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(), // 1 hour duration
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+      };
+      
+      console.log('📦 Email payload:', JSON.stringify(emailPayload, null, 2));
+      
+      console.log('📤 Sending fetch request to API...');
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          to: email,
-          organizerName: 'TimeSyncAI',
-          organizerEmail: 'noreply@timesyncai.com',
-          plan: `You've been invited to join a participant group for meeting scheduling. Click the link below to accept the invitation and connect your calendar to help find the best meeting times for everyone.\n\nInvitation Link: ${invitationLink}`,
-          meeting: {
-            title: 'Group Invitation - Connect Your Calendar',
-            description: 'You\'ve been invited to join a participant group for meeting scheduling. Please accept this invitation to connect your calendar and help find optimal meeting times.',
-            location: 'Virtual Meeting',
-            startISO: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-            endISO: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(), // 1 hour duration
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          }
-        })
+        body: JSON.stringify(emailPayload)
       });
 
+      console.log('📬 Response received. Status:', response.status, response.statusText);
+      console.log('📬 Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Email service error: ${errorData.error || 'Unknown error'}`);
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+        console.error('❌ Error response data:', errorData);
+        throw new Error(`Email service error: ${errorData.error || 'Unknown error'} (Status: ${response.status})`);
       }
 
       const result = await response.json();
-      console.log('Group invitation email sent successfully:', result.messageId);
+      console.log('✅ Group invitation email sent successfully:', result);
+      console.log('✅ Message ID:', result.messageId);
       
     } catch (error) {
       console.error('Failed to send group invitation email:', error);

@@ -192,20 +192,34 @@ export default function GroupManagement() {
       
       // Send invitations to all participants
       console.log('📧 Sending invitations to participants...');
+      const invitationResults = [];
       for (const participant of newGroupParticipants) {
         try {
-          await InvitationService.createGroupInvitation(
+          console.log(`📧 Attempting to send invitation to: ${participant.email}`);
+          const invitationId = await InvitationService.createGroupInvitation(
             groupRef.id,
             currentUser.id,
             participant.email
           );
-          console.log(`✅ Invitation sent to ${participant.email}`);
+          console.log(`✅ Invitation sent successfully to ${participant.email}, ID: ${invitationId}`);
+          invitationResults.push({ email: participant.email, success: true, invitationId });
         } catch (error) {
           console.error(`❌ Failed to send invitation to ${participant.email}:`, error);
-          // Continue with other invitations even if one fails
+          console.error(`Error details:`, error instanceof Error ? error.message : 'Unknown error');
+          console.error(`Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+          invitationResults.push({ email: participant.email, success: false, error });
         }
       }
-      console.log('✅ All invitations sent!');
+      console.log('📊 Invitation results:', invitationResults);
+      const succeeded = invitationResults.filter(r => r.success).length;
+      const failed = invitationResults.filter(r => !r.success).length;
+      console.log(`✅ Invitation sending complete: ${succeeded} succeeded, ${failed} failed`);
+      
+      if (failed > 0) {
+        alert(`Group created successfully! Sent ${succeeded} invitations, but ${failed} failed. Check console for details.`);
+      } else {
+        alert(`Group created successfully! All ${succeeded} invitations sent.`);
+      }
       
       // Reset form
       setNewGroupName('');
@@ -587,3 +601,4 @@ export default function GroupManagement() {
     </div>
   );
 }
+
