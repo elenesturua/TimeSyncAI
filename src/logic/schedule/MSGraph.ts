@@ -1,3 +1,5 @@
+import { PublicClientApplication } from '@azure/msal-browser';
+
 // Utility functions to access Microsoft Graph API
 
 // Type definitions for Microsoft Graph API responses
@@ -48,12 +50,30 @@ interface GraphEventsResponse {
 
 /**
  * Get authentication token for Microsoft Graph API
+ * @param msalInstance - MSAL instance for token retrieval
  * @returns Promise<string> - The access token
  */
-async function GetToken(): Promise<string> {
-  // TODO: Implement actual token retrieval logic
-  // This should integrate with your existing authentication system
-  throw new Error('Token retrieval not implemented yet');
+async function GetToken(msalInstance?: PublicClientApplication): Promise<string> {
+  if (!msalInstance) {
+    throw new Error('MSAL instance required for token retrieval');
+  }
+  
+  try {
+    const account = msalInstance.getActiveAccount();
+    if (!account) {
+      throw new Error('No active account');
+    }
+
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+      scopes: ['Calendars.Read', 'Calendars.ReadWrite'],
+      account
+    });
+
+    return tokenResponse.accessToken;
+  } catch (error) {
+    console.error('Error acquiring token:', error);
+    throw new Error('Token retrieval failed');
+  }
 }
 
 /**
@@ -61,12 +81,18 @@ async function GetToken(): Promise<string> {
  * @param userID - The user ID or email address
  * @param startDay - Start date in ISO format (YYYY-MM-DD)
  * @param endDay - End date in ISO format (YYYY-MM-DD)
+ * @param msalInstance - MSAL instance for authentication
  * @returns Promise<GraphEvent[]> - Array of calendar events
  */
-async function GetCalendarEvents(userID: string, startDay: string, endDay: string): Promise<GraphEvent[]> {
+async function GetCalendarEvents(
+  userID: string, 
+  startDay: string, 
+  endDay: string,
+  msalInstance?: PublicClientApplication
+): Promise<GraphEvent[]> {
   try {
     // Get authentication token
-    const token = await GetToken();
+    const token = await GetToken(msalInstance);
     
     // Construct the API endpoint
     const endpoint = userID === 'me' 

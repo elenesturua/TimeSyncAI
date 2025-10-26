@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { AuthenticatedTemplate, UnauthenticatedTemplate } from '@azure/msal-react';
 import { Calendar, LogIn } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '@/authConfig';

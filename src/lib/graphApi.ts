@@ -1,4 +1,3 @@
-import { PublicClientApplication } from '@azure/msal-browser';
 import { Client } from '@microsoft/microsoft-graph-client';
 
 // Types for calendar data
@@ -25,7 +24,7 @@ export interface UserProfile {
 }
 
 // Create Graph client with access token
-export const createGraphClient = (msalInstance: PublicClientApplication) => {
+export const createGraphClient = (msalInstance: any) => {
   const authProvider = (callback: (error: any, accessToken?: string | null) => void) => {
     const account = msalInstance.getActiveAccount();
     if (!account) {
@@ -36,9 +35,9 @@ export const createGraphClient = (msalInstance: PublicClientApplication) => {
     msalInstance.acquireTokenSilent({
       scopes: ['Calendars.Read', 'Calendars.ReadWrite'],
       account: account,
-    }).then((response) => {
+    }).then((response: any) => {
       callback(null, response.accessToken || null);
-    }).catch((error) => {
+    }).catch((error: any) => {
       callback(error, null);
     });
   };

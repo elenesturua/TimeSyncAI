@@ -8,7 +8,7 @@ import CopyButton from '@/components/CopyButton';
 import { type Group } from '@/lib/api';
 import { createGraphClient, getUserProfile, getCalendarEvents, type CalendarEvent } from '@/lib/graphApi';
 import { InvitationService } from '@/services/invitationService';
-import { CalendarService } from '@/services/calendarService';
+import { AISchedulingService } from '@/services/aiSchedulingService';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, getDocs, getDoc, query, where } from 'firebase/firestore';
 import { Meeting, User as FirestoreUser, ParticipantGroup } from '@/types/firestore';
@@ -461,58 +461,34 @@ export default function PlanMeeting() {
         if (!newMeetingId) return;
       }
       
-      // Get all participant user IDs from Firestore
-      const participantEmails = participants.map(p => p.email);
-      const participantQuery = query(
-        collection(db, 'users'),
-        where('email', 'in', participantEmails)
-      );
-      const participantSnapshot = await getDocs(participantQuery);
-      const participantUserIds = participantSnapshot.docs.map(doc => doc.id);
-      
-      // Add current user to participants
-      const allUserIds = currentUser ? [currentUser.id, ...participantUserIds] : participantUserIds;
-      
-      if (allUserIds.length === 0) {
-        // Fallback to mock suggestions if no users found
-        await generateMockSuggestions();
-        return;
-      }
-      
-      // Get calendar events for all participants
-      const startDate = new Date(dateRange.start);
-      const endDate = new Date(dateRange.end);
-      
-      const availableSlots = await CalendarService.findAvailableSlots(
-        allUserIds,
-        startDate,
-        endDate,
-        duration,
-        customHours
+      // Generate AI-powered suggestions
+      const aiSuggestions = await AISchedulingService.generateAISuggestions(
+        {
+          participants: participants.map(p => ({
+            email: p.email,
+            name: p.name,
+            importance: 'Mid' as const // Default - can be made configurable
+          })),
+          startDate: dateRange.start,
+          endDate: dateRange.end,
+          durationMinutes: duration,
+          workingHours: {
+            start: parseInt(customHours.start.split(':')[0]),
+            end: parseInt(customHours.end.split(':')[0])
+          }
+        },
+        instance as any
       );
       
-      // Convert to suggestions format
-      const newSuggestions: Suggestion[] = availableSlots.slice(0, 5).map((slot, index) => {
-        const endSlot = new Date(slot.getTime() + duration * 60000);
-        return {
-          startISO: slot.toISOString(),
-          endISO: endSlot.toISOString(),
-          attendeesFree: participantEmails,
-          attendeesMissing: [],
-          badges: ['All free', 'AI suggested'],
-          reason: `Optimal time slot ${index + 1} based on all participants' calendars`
-        };
-      });
-      
-      if (newSuggestions.length > 0) {
-        setSuggestions(newSuggestions);
+      if (aiSuggestions.length > 0) {
+        setSuggestions(aiSuggestions);
       } else {
-        // Fallback to mock suggestions if no slots found
+        // Fallback to mock suggestions if AI returns nothing
         await generateMockSuggestions();
       }
       
     } catch (error) {
-      console.error('Error getting suggestions:', error);
+      console.error('Error getting AI suggestions:', error);
       // Fallback to mock suggestions on error
       await generateMockSuggestions();
     } finally {

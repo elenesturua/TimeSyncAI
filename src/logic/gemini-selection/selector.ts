@@ -1,5 +1,6 @@
 
-import { Schedule, User, type ScoredTimeInterval } from '../schedule/scheduler';
+import { Schedule, User } from '../schedule/scheduler';
+import type { ScoredTimeInterval } from '../schedule/scheduler';
 
 // Types for the Gemini API integration
 type Priority = "High" | "Mid" | "Low";
@@ -10,7 +11,7 @@ type TimeslotInput = {
   endISO: string;
 };
 
-type ParticipantInput = {
+export type ParticipantInput = {
   id: string;
   name?: string;
   priority: Priority;
