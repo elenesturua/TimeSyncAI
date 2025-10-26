@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { AuthenticatedTemplate, UnauthenticatedTemplate } from '@azure/msal-react';
 import { Calendar, LogIn } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '@/authConfig';
@@ -33,11 +34,11 @@ export default function LandingPage() {
       
       // If user is authenticated, redirect with small delay
       if (isAuthenticated && !hasRedirected) {
-        console.log('LandingPage - User authenticated, redirecting to /plan');
+        console.log('LandingPage - User authenticated, redirecting to /groups');
         setHasRedirected(true);
                  setTimeout(() => {
                    console.log('LandingPage - Executing redirect to /groups');
-                   window.location.href = '/groups';
+                   navigate('/groups');
                  }, 100);
       }
     }
@@ -92,7 +93,7 @@ export default function LandingPage() {
         </h2>
         
         <p className="text-2xl text-gray-600 mb-12 max-w-3xl mx-auto">
-          AI-powered scheduling for students. Share a link, connect calendars, and let our smart assistant find the perfect time for everyone.
+          AI-powered scheduling for teams. Create groups, connect calendars, and let our smart assistant find the perfect time for everyone.
         </p>
 
         <div className="flex items-center justify-center">
