@@ -124,13 +124,13 @@ export interface SendInviteResponse {
   error?: string;
 }
 
-// Email API - connects to local backend server
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787';
+// Email API - uses Vercel serverless functions
+const API_URL = '/api/send-invite';
 
 export const emailApi = {
   sendInvite: async (data: SendInviteRequest): Promise<SendInviteResponse> => {
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/send-invite`, data);
+      const response = await axios.post(API_URL, data);
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
