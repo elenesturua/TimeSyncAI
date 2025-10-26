@@ -7,7 +7,8 @@ export interface TimeSlot {
   timezone: string;
 }
 
-export function formatTimeSlot(slot: TimeSlot, userTimezone: string = 'UTC'): string {
+export function formatTimeSlot(slot: TimeSlot, userTimezone: string = 'America/Chicago'): string {
+  // Always use Chicago timezone for displaying meeting times
   const startFormatted = formatInTimeZone(slot.start, userTimezone, 'h:mm a');
   const endFormatted = formatInTimeZone(slot.end, userTimezone, 'h:mm a');
   const dateFormatted = formatInTimeZone(slot.start, userTimezone, 'MMM d, yyyy');
@@ -28,10 +29,13 @@ export function formatDuration(minutes: number): string {
 }
 
 export function parseISOTimeSlot(startISO: string, endISO: string): TimeSlot {
+  // Parse ISO strings as UTC, then format in Chicago timezone
+  const start = parseISO(startISO);
+  const end = parseISO(endISO);
   return {
-    start: parseISO(startISO),
-    end: parseISO(endISO),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    start,
+    end,
+    timezone: 'America/Chicago' // Always use Chicago timezone for display
   };
 }
 
