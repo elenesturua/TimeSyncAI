@@ -70,7 +70,7 @@ const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemi
  * @param body - Request body with participants and preferences
  * @returns Promise<ScoredTimeInterval[]> - Array of scored time slots
  */
-async function generateScoredSlots(body: RequestBody): Promise<ScoredTimeInterval[]> {
+export async function generateScoredSlots(body: RequestBody): Promise<ScoredTimeInterval[]> {
   try {
     // Create schedule instance
     const startDate = new Date(body.startDate);
@@ -113,7 +113,7 @@ async function generateScoredSlots(body: RequestBody): Promise<ScoredTimeInterva
  * @param scoredSlots - Pre-scored time slots from the Schedule system
  * @returns Object with system instruction and user prompt
  */
-function buildGeminiPrompt(body: RequestBody, scoredSlots: ScoredTimeInterval[]) {
+export function buildGeminiPrompt(body: RequestBody, scoredSlots: ScoredTimeInterval[]) {
   const { participants, preferences, contextNotes } = body;
 
   // Convert scored slots to timeslot text for prompt
@@ -214,7 +214,7 @@ Analyze the pre-scored timeslots and provide your top 3 recommendations in the e
  * @param geminiText - Raw text output from Gemini
  * @returns Array of SuggestedSlot objects
  */
-function parseGeminiTextOutput(geminiText: string): SuggestedSlot[] {
+export function parseGeminiTextOutput(geminiText: string): SuggestedSlot[] {
   const suggestions: SuggestedSlot[] = [];
   
   try {
@@ -333,7 +333,7 @@ function parseGeminiTextOutput(geminiText: string): SuggestedSlot[] {
  * @param index - Index for generating slot ID
  * @returns SuggestedSlot object
  */
-function convertToSuggestedSlot(scoredSlot: ScoredTimeInterval, index: number): SuggestedSlot {
+export function convertToSuggestedSlot(scoredSlot: ScoredTimeInterval, index: number): SuggestedSlot {
   // Build suggested attendees list
   const suggestedAttendees = [
     ...scoredSlot.participants.available.map((user: User) => ({
