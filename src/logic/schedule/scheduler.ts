@@ -629,7 +629,7 @@ export class Schedule {
     overall: number;
   }): number {
     // MID * 0.4 + OverallAttendance * 0.6
-    return (attendance.mid * 0.4) + (attendance.overall * 0.6);
+    return (attendance.mid==0?0.4:attendance.mid * 0.4) + (attendance.overall * 0.6);
   }
 
   /**
