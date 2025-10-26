@@ -11,7 +11,7 @@ import { InvitationService } from '@/services/invitationService';
 import { CalendarService } from '@/services/calendarService';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, getDocs, getDoc, query, where } from 'firebase/firestore';
-import { Meeting, User as FirestoreUser } from '@/types/firestore';
+import { Meeting, User as FirestoreUser, ParticipantGroup } from '@/types/firestore';
 
 interface Participant {
   email: string;
@@ -69,9 +69,10 @@ export default function PlanMeeting() {
   
   // Groups state
   const [groups, setGroups] = useState<Group[]>([]);
-  const [_isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [showGroupsDropdown, setShowGroupsDropdown] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [isLoadingFromGroupUrl, setIsLoadingFromGroupUrl] = useState(false);
 
   // Step navigation functions
   const nextStep = () => {
@@ -256,37 +257,60 @@ export default function PlanMeeting() {
   };
 
   const loadGroups = async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !currentUser) return;
     
     setIsLoadingGroups(true);
     try {
-      // For demo purposes, use mock data
-      const mockGroups: Group[] = [
-        {
-          id: '1',
-          name: 'Development Team',
-          participants: [
-            { email: 'john@example.com', displayName: 'John Doe', timezone: 'UTC', connected: false },
-            { email: 'jane@example.com', displayName: 'Jane Smith', timezone: 'UTC', connected: false },
-            { email: 'bob@example.com', displayName: 'Bob Wilson', timezone: 'UTC', connected: false }
-          ],
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: '2', 
-          name: 'Marketing Squad',
-          participants: [
-            { email: 'alice@example.com', displayName: 'Alice Johnson', timezone: 'UTC', connected: false },
-            { email: 'charlie@example.com', displayName: 'Charlie Brown', timezone: 'UTC', connected: false }
-          ],
-          createdAt: new Date().toISOString()
-        }
-      ];
-      setGroups(mockGroups);
+      // Load groups where user is owner OR participant
+      const ownerGroupsQuery = query(
+        collection(db, 'participantGroups'),
+        where('ownerId', '==', currentUser.id)
+      );
+      const ownerSnapshot = await getDocs(ownerGroupsQuery);
       
-      // Uncomment when API is ready:
-      // const data = await withBearer(getAccessToken, groupsApi.getAll);
-      // setGroups(data);
+      const participantGroupsQuery = query(
+        collection(db, 'participantGroups'),
+        where('participants', 'array-contains', currentUser.id)
+      );
+      const participantSnapshot = await getDocs(participantGroupsQuery);
+      
+      // Combine and deduplicate
+      const allGroupDocs = [
+        ...ownerSnapshot.docs,
+        ...participantSnapshot.docs.filter(doc => 
+          !ownerSnapshot.docs.some(oDoc => oDoc.id === doc.id)
+        )
+      ];
+      
+      // Convert to Group format
+      const groupsData = await Promise.all(
+        allGroupDocs.map(async (docSnapshot) => {
+          const groupData = docSnapshot.data() as ParticipantGroup;
+          
+          // Get participant details
+          const participantDetails = await Promise.all(
+            (groupData.participants || []).map(async (participantId: string) => {
+              const userDoc = await getDoc(doc(collection(db, 'users'), participantId));
+              const userData = userDoc.data();
+              return {
+                email: userData?.email || participantId,
+                displayName: userData?.displayName,
+                timezone: 'UTC', // TODO: get from user preferences
+                connected: userData?.calendarConnected || false
+              };
+            })
+          );
+          
+          return {
+            id: docSnapshot.id,
+            name: groupData.name,
+            participants: participantDetails,
+            createdAt: groupData.createdAt
+          } as Group;
+        })
+      );
+      
+      setGroups(groupsData);
     } catch (error) {
       console.error('Failed to load groups:', error);
     } finally {
@@ -306,11 +330,11 @@ export default function PlanMeeting() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && currentUser) {
       loadGroups();
       // Load group from URL if present
       const groupId = searchParams.get('groupId');
-      if (groupId && currentUser) {
+      if (groupId) {
         loadGroupParticipants(groupId);
       }
     }
