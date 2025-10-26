@@ -534,7 +534,10 @@ export class Schedule {
       // Iterate through each day in the date range
       for (let currentDate = new Date(startDateObj); currentDate <= endDateObj; currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000)) {
         // Generate time slots for this day using the first user's working hours as reference
-        const referenceUser = allUsers[0];
+        let referenceUser = allUsers.find(user => user.importance === 'High');
+        if (!referenceUser) {
+          referenceUser = allUsers[0];
+        }
         const daySlots = this.generateDayTimeSlots(
           currentDate,
           this.MeetingDurationMinutes,
