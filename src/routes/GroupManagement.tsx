@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { ParticipantGroup, User as FirestoreUser } from '@/types/firestore';
 import { testFirebaseConnection } from '@/utils/firebaseTest';
+import { InvitationService } from '@/services/invitationService';
 
 interface Participant {
   email: string;
@@ -176,7 +177,7 @@ export default function GroupManagement() {
         currentUserId: currentUser.id
       });
       
-      // Create the group first in Firestore
+      // Create the group first in Firestore to get the group ID
       const groupData: Omit<ParticipantGroup, 'id'> = {
         ownerId: currentUser.id,
         name: newGroupName.trim(),
@@ -188,6 +189,23 @@ export default function GroupManagement() {
       console.log('💾 Adding group to Firestore...');
       const groupRef = await addDoc(collection(db, 'participantGroups'), groupData);
       console.log('✅ Group created with ID:', groupRef.id);
+      
+      // Send invitations to all participants
+      console.log('📧 Sending invitations to participants...');
+      for (const participant of newGroupParticipants) {
+        try {
+          await InvitationService.createGroupInvitation(
+            groupRef.id,
+            currentUser.id,
+            participant.email
+          );
+          console.log(`✅ Invitation sent to ${participant.email}`);
+        } catch (error) {
+          console.error(`❌ Failed to send invitation to ${participant.email}:`, error);
+          // Continue with other invitations even if one fails
+        }
+      }
+      console.log('✅ All invitations sent!');
       
       // Reset form
       setNewGroupName('');

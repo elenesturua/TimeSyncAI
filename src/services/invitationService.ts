@@ -50,11 +50,10 @@ export class InvitationService {
     const invitationLink = `${baseUrl}/invite/${token}`;
     
     try {
-      // Call your existing backend email service
-      const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787'}/api/send-invite`;
-      console.log('🔗 Backend URL:', backendUrl);
-      console.log('🔗 VITE_BACKEND_URL env var:', import.meta.env.VITE_BACKEND_URL);
-      const response = await fetch(backendUrl, {
+      // Call Vercel serverless function
+      const apiUrl = '/api/send-invite';
+      console.log('🔗 API URL:', apiUrl);
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
