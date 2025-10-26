@@ -282,7 +282,7 @@ export default function GroupManagement() {
   };
 
   const createMeetingFromGroup = (groupId: string) => {
-    navigate(`/create-meeting?groupId=${groupId}`);
+    navigate(`/plan?groupId=${groupId}`);
   };
 
   const acceptInvitation = async (invitationId: string) => {

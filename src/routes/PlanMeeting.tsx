@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Users, Calendar, Clock, Plus, X, Link, Star, CheckCircle, FolderOpen, ChevronDown, Sun, Moon } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import Loader from '@/components/Loader';
@@ -31,6 +31,7 @@ interface Suggestion {
 
 export default function PlanMeeting() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { instance, accounts } = useMsal();
   const account = accounts[0];
   const isAuthenticated = accounts.length > 0;
@@ -307,8 +308,39 @@ export default function PlanMeeting() {
   useEffect(() => {
     if (isAuthenticated) {
       loadGroups();
+      // Load group from URL if present
+      const groupId = searchParams.get('groupId');
+      if (groupId && currentUser) {
+        loadGroupParticipants(groupId);
+      }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser, searchParams]);
+
+  const loadGroupParticipants = async (groupId: string) => {
+    try {
+      const groupDoc = await getDoc(doc(collection(db, 'participantGroups'), groupId));
+      const groupData = groupDoc.data();
+      
+      if (groupData) {
+        // Get participant details
+        const participantData = await Promise.all(
+          (groupData.participants || []).map(async (participantId: string) => {
+            const userDoc = await getDoc(doc(collection(db, 'users'), participantId));
+            const userData = userDoc.data();
+            return {
+              email: userData?.email || participantId,
+              name: userData?.displayName,
+              connected: userData?.calendarConnected || false
+            } as Participant;
+          })
+        );
+        
+        setParticipants(participantData);
+      }
+    } catch (error) {
+      console.error('Failed to load group participants:', error);
+    }
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
