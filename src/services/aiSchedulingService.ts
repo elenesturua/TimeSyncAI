@@ -41,9 +41,7 @@ export class AISchedulingService {
       
       // 1. Fetch calendar data for all participants
       const participantData = await this.fetchParticipantCalendars(
-        request.participants,
-        request.startDate,
-        request.endDate,
+        request,
         msalInstance
       );
 
@@ -81,11 +79,10 @@ export class AISchedulingService {
    * For now, generates suggestions without calendar data (future: participants will share availability)
    */
   private static async fetchParticipantCalendars(
-    participants: PlanMeetingRequest['participants'],
-    startDate: string,
-    endDate: string,
+    request: PlanMeetingRequest,
     _msalInstance: IPublicClientApplication
   ): Promise<ParticipantInput[]> {
+    const { participants, startDate, endDate } = request;
     console.log(`Fetching calendars for ${participants.length} participants from Firestore`);
     
     // Fetch calendars in parallel for efficiency
@@ -145,7 +142,12 @@ export class AISchedulingService {
             name: participant.name,
             priority: participant.importance || 'Mid',
             busy,
-            workingTime: {
+            workingTime: request.workingHours ? {
+              startHour: request.workingHours.start,
+              endHour: request.workingHours.end,
+              workingDays: [1, 2, 3, 4, 5], // Mon-Fri
+              timezone: 'America/Chicago'
+            } : {
               startHour: 9,
               endHour: 17,
               workingDays: [1, 2, 3, 4, 5], // Mon-Fri
