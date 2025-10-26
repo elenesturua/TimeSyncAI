@@ -263,16 +263,21 @@ export default function PlanMeeting() {
     
     setIsCreatingMeeting(true);
     try {
-      // Convert suggestion times to local Chicago time for proper display
-      // The backend expects UTC times, but we need to adjust for display
+      // Convert UTC times to local Chicago time for display
+      // Then add 5 hours to send to backend (to account for timezone offset)
       const startUTC = new Date(suggestion.startISO);
       const endUTC = new Date(suggestion.endISO);
+      
+      // Add 5 hours to convert from UTC to local Chicago time for the backend
+      // This ensures the backend creates the ICS with the correct time
+      startUTC.setHours(startUTC.getHours() + 5);
+      endUTC.setHours(endUTC.getHours() + 5);
       
       console.log('📧 Sending invitations with meeting time:', {
         startISO_original: suggestion.startISO,
         endISO_original: suggestion.endISO,
-        startTime_local: startUTC.toLocaleString('en-US', { timeZone: 'America/Chicago' }),
-        endTime_local: endUTC.toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        startTime_local: new Date(suggestion.startISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        endTime_local: new Date(suggestion.endISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
         startUTC_sending: startUTC.toISOString(),
         endUTC_sending: endUTC.toISOString(),
         duration: `${duration} minutes`
@@ -1557,7 +1562,7 @@ export default function PlanMeeting() {
               <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
                 <h3 className="font-semibold text-primary-900 mb-2">Selected Meeting Time</h3>
                 <p className="text-primary-700">
-                  {new Date(selectedSuggestion.startISO).toLocaleString()} - {new Date(selectedSuggestion.endISO).toLocaleString()}
+                  {new Date(selectedSuggestion.startISO).toLocaleString('en-US', { timeZone: 'America/Chicago' })} - {new Date(selectedSuggestion.endISO).toLocaleString('en-US', { timeZone: 'America/Chicago' })}
                 </p>
                 <p className="text-sm text-primary-600 mt-1">
                   Duration: {duration} minutes • {selectedSuggestion.badges.join(', ')}
