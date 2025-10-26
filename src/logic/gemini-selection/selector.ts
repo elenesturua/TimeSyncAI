@@ -63,7 +63,35 @@ type ResponseBody = {
   error?: string;
 };
 
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-03-25:generateContent";
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+};
+
+type ChatRequest = {
+  message: string;
+  conversationHistory: ChatMessage[];
+  currentSuggestions: SuggestedSlot[];
+  allAvailableSlots: ScoredTimeInterval[];
+  participants: ParticipantInput[];
+  preferences?: Preferences;
+  contextNotes?: string;
+};
+
+type ChatResponse = {
+  success: boolean;
+  message: string;
+  newSuggestions?: SuggestedSlot[];
+  conversationHistory: ChatMessage[];
+  availableActions: string[];
+  metadata?: {
+    totalSlotsRemaining: number;
+    suggestionsChanged: boolean;
+  };
+};
+
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 /**
  * Generate scored meeting slots using the Schedule system
@@ -328,6 +356,318 @@ export function parseGeminiTextOutput(geminiText: string): SuggestedSlot[] {
 }
 
 /**
+ * Build conversation context for the chatbot
+ * @param chatRequest - Chat request with conversation history and current state
+ * @returns Object with system instruction and user prompt for chat
+ */
+function buildChatPrompt(chatRequest: ChatRequest) {
+  const { message, conversationHistory, currentSuggestions, allAvailableSlots, participants, preferences, contextNotes } = chatRequest;
+
+  // Build current suggestions summary
+  const currentSuggestionsText = currentSuggestions.map((suggestion, index) => {
+    return `${index + 1}. ${suggestion.timeslot.id} (${suggestion.timeslot.startISO} - ${suggestion.timeslot.endISO}) - Score: ${suggestion.score}, Confidence: ${suggestion.confidence}`;
+  }).join('\n');
+
+  // Build available alternatives summary (excluding current suggestions)
+  const currentSlotIds = new Set(currentSuggestions.map(s => s.timeslot.id));
+  const alternativeSlots = allAvailableSlots
+    .filter((_, index) => !currentSlotIds.has(`slot_${index + 1}`))
+    .slice(0, 10) // Show next 10 alternatives
+    .map((slot, index) => {
+      const slotId = `slot_${currentSuggestions.length + index + 1}`;
+      const duration = Math.round((slot.end.getTime() - slot.start.getTime()) / 60000);
+      return `${slotId}: ${slot.start.toISOString()} - ${slot.end.toISOString()} (${duration}min, Score: ${slot.score.toFixed(2)})`;
+    }).join('\n');
+
+  // Build conversation history
+  const conversationText = conversationHistory.map(msg => 
+    `${msg.role.toUpperCase()}: ${msg.content}`
+  ).join('\n');
+
+  // Build participants summary
+  const participantsText = participants.map(p => 
+    `${p.id} (${p.priority} priority)`
+  ).join(', ');
+
+  const systemInstruction = `
+You are an intelligent meeting scheduling assistant with access to calendar data and scheduling analytics. You're having a conversation with a user about their meeting scheduling options.
+
+CONTEXT:
+- You have access to pre-scored meeting time slots based on participant availability
+- You can suggest alternative time slots, explain scheduling decisions, and help refine choices
+- You can provide the next best 3 options when requested
+- You should be conversational, helpful, and provide actionable insights
+
+CAPABILITIES:
+1. Explain why certain time slots are recommended
+2. Suggest alternative time slots from the available options
+3. Help users understand scheduling conflicts and trade-offs
+4. Provide the next set of 3 best options when requested
+5. Answer questions about participant availability and preferences
+6. Help users make informed scheduling decisions
+
+RESPONSE FORMAT:
+Respond naturally in conversation format. If the user requests new time slot suggestions or alternatives, provide them in this format:
+
+NEW SUGGESTIONS:
+[List 1-3 time slots with brief explanations]
+
+Otherwise, just respond conversationally to help the user understand their options.
+`;
+
+  const userPrompt = `
+CURRENT MEETING CONTEXT:
+Participants: ${participantsText}
+Meeting Preferences: ${JSON.stringify(preferences || {}, null, 2)}
+Context Notes: ${contextNotes || "None"}
+
+CURRENT TOP 3 SUGGESTIONS:
+${currentSuggestionsText}
+
+AVAILABLE ALTERNATIVE TIME SLOTS:
+${alternativeSlots || "No additional alternatives available"}
+
+CONVERSATION HISTORY:
+${conversationText}
+
+USER'S LATEST MESSAGE:
+${message}
+
+Please respond to the user's message. If they're asking for new suggestions, alternatives, or the "next 3 options", provide them using the NEW SUGGESTIONS format. Otherwise, respond conversationally to help them with their scheduling decision.
+`;
+
+  return { systemInstruction, userPrompt };
+}
+
+/**
+ * Parse chat response to extract new suggestions if provided
+ * @param responseText - Gemini's response text
+ * @param allAvailableSlots - All available time slots
+ * @param currentSuggestionCount - Number of current suggestions shown
+ * @returns Object with parsed suggestions and clean message
+ */
+function parseChatResponse(responseText: string, allAvailableSlots: ScoredTimeInterval[], currentSuggestionCount: number) {
+  const newSuggestions: SuggestedSlot[] = [];
+  let cleanMessage = responseText;
+
+  // Check if response contains new suggestions
+  const suggestionsMatch = responseText.match(/NEW SUGGESTIONS:\s*([\s\S]+?)(?:\n\n|$)/);
+  
+  if (suggestionsMatch) {
+    const suggestionsText = suggestionsMatch[1];
+    cleanMessage = responseText.replace(/NEW SUGGESTIONS:\s*[\s\S]+?(?:\n\n|$)/, '').trim();
+    
+    // Parse suggested slots from the text
+    const suggestionLines = suggestionsText.split('\n').filter(line => line.trim());
+    
+    for (let i = 0; i < Math.min(3, suggestionLines.length); i++) {
+      const line = suggestionLines[i];
+      
+      // Try to extract slot information from various formats
+      const slotMatch = line.match(/slot_(\d+)|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+      
+      if (slotMatch) {
+        let slotIndex = -1;
+        
+        if (slotMatch[1]) {
+          // Format: slot_X
+          slotIndex = parseInt(slotMatch[1]) - 1;
+        } else if (slotMatch[2]) {
+          // Format: ISO timestamp - find matching slot
+          const timestamp = slotMatch[2];
+          slotIndex = allAvailableSlots.findIndex(slot => 
+            slot.start.toISOString().includes(timestamp)
+          );
+        }
+        
+        if (slotIndex >= 0 && slotIndex < allAvailableSlots.length) {
+          const scoredSlot = allAvailableSlots[slotIndex];
+          const suggestion = convertToSuggestedSlot(scoredSlot, currentSuggestionCount + i);
+          
+          // Override reason with Gemini's explanation if provided
+          const reasonMatch = line.match(/[-:]\s*(.+)$/);
+          if (reasonMatch) {
+            suggestion.reason = reasonMatch[1].trim();
+          }
+          
+          newSuggestions.push(suggestion);
+        }
+      }
+    }
+  }
+
+  return { newSuggestions, cleanMessage };
+}
+
+/**
+ * Interactive chatbot for scheduling assistance
+ * @param chatRequest - Chat request with user message and context
+ * @returns Promise<ChatResponse> - Chat response with assistant message and optional new suggestions
+ */
+export async function chatWithSchedulingAssistant(chatRequest: ChatRequest): Promise<ChatResponse> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    if (!apiKey) {
+      return {
+        success: false,
+        message: "I'm sorry, but the AI assistant is not available right now. However, I can help you explore the available time slots manually.",
+        conversationHistory: [
+          ...chatRequest.conversationHistory,
+          {
+            role: "user",
+            content: chatRequest.message,
+            timestamp: new Date().toISOString()
+          },
+          {
+            role: "assistant", 
+            content: "AI assistant unavailable - manual exploration available",
+            timestamp: new Date().toISOString()
+          }
+        ],
+        availableActions: ["show_next_3", "show_alternatives", "explain_scores"]
+      };
+    }
+
+    // Build the chat prompt
+    const promptBundle = buildChatPrompt(chatRequest);
+
+    const payload = {
+      systemInstruction: { parts: [{ text: promptBundle.systemInstruction }] },
+      contents: [{ role: "user", parts: [{ text: promptBundle.userPrompt }] }],
+      generationConfig: {
+        maxOutputTokens: 1500,
+        temperature: 0.3,
+        topP: 0.8,
+      },
+    };
+
+    const resp = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`Gemini API failed: ${resp.status}`);
+    }
+
+    const geminiResult = await resp.json();
+    const responseText = geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    if (!responseText.trim()) {
+      throw new Error("Empty response from Gemini");
+    }
+
+    // Parse the response for new suggestions
+    const { newSuggestions, cleanMessage } = parseChatResponse(
+      responseText, 
+      chatRequest.allAvailableSlots, 
+      chatRequest.currentSuggestions.length
+    );
+
+    // Update conversation history
+    const updatedHistory: ChatMessage[] = [
+      ...chatRequest.conversationHistory,
+      {
+        role: "user",
+        content: chatRequest.message,
+        timestamp: new Date().toISOString()
+      },
+      {
+        role: "assistant",
+        content: cleanMessage,
+        timestamp: new Date().toISOString()
+      }
+    ];
+
+    // Determine available actions
+    const availableActions = [
+      "show_next_3",
+      "explain_current",
+      "show_alternatives",
+      "ask_question"
+    ];
+
+    const response: ChatResponse = {
+      success: true,
+      message: cleanMessage,
+      conversationHistory: updatedHistory,
+      availableActions,
+      metadata: {
+        totalSlotsRemaining: Math.max(0, chatRequest.allAvailableSlots.length - chatRequest.currentSuggestions.length),
+        suggestionsChanged: newSuggestions.length > 0
+      }
+    };
+
+    if (newSuggestions.length > 0) {
+      response.newSuggestions = newSuggestions;
+    }
+
+    return response;
+
+  } catch (error) {
+    console.error('Error in chat assistant:', error);
+    
+    return {
+      success: false,
+      message: "I encountered an error while processing your request. Let me help you manually explore the available options.",
+      conversationHistory: [
+        ...chatRequest.conversationHistory,
+        {
+          role: "user",
+          content: chatRequest.message,
+          timestamp: new Date().toISOString()
+        },
+        {
+          role: "assistant",
+          content: "Error occurred - manual assistance available",
+          timestamp: new Date().toISOString()
+        }
+      ],
+      availableActions: ["show_next_3", "show_alternatives", "manual_help"]
+    };
+  }
+}
+
+/**
+ * Get the next best N time slot suggestions
+ * @param allAvailableSlots - All available scored time slots
+ * @param currentSuggestions - Currently shown suggestions
+ * @param count - Number of suggestions to return (default 3)
+ * @returns Array of next best SuggestedSlot objects
+ */
+export function getNextBestSlots(
+  allAvailableSlots: ScoredTimeInterval[], 
+  currentSuggestions: SuggestedSlot[], 
+  count: number = 3
+): SuggestedSlot[] {
+  // Get IDs of current suggestions to exclude them
+  const currentSlotIds = new Set(currentSuggestions.map(s => s.timeslot.id));
+  
+  // Find the next best slots that aren't already suggested
+  const nextSlots: SuggestedSlot[] = [];
+  let slotIndex = 0;
+  
+  for (const scoredSlot of allAvailableSlots) {
+    const slotId = `slot_${slotIndex + 1}`;
+    
+    if (!currentSlotIds.has(slotId) && nextSlots.length < count) {
+      const suggestion = convertToSuggestedSlot(scoredSlot, slotIndex);
+      nextSlots.push(suggestion);
+    }
+    
+    slotIndex++;
+    
+    if (nextSlots.length >= count) {
+      break;
+    }
+  }
+  
+  return nextSlots;
+}
+
+/**
  * Convert ScoredTimeInterval to SuggestedSlot format
  * @param scoredSlot - Scored time interval from Schedule system
  * @param index - Index for generating slot ID
@@ -417,7 +757,7 @@ export async function POST(request: Request) {
 
     // Try Gemini first if API key is available
     const apiKey = process.env.GEMINI_API_KEY;
-    
+
     if (apiKey) {
       try {
         console.log('Attempting Gemini API call...');
@@ -518,6 +858,118 @@ export async function POST(request: Request) {
     return new Response(JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : "Unknown error"
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// ---------------------- Chat Handler ----------------------
+export async function CHAT(request: Request) {
+  try {
+    const body = (await request.json()) as ChatRequest;
+
+    // Basic validation
+    if (!body.message || !body.message.trim()) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: "Please provide a message to continue the conversation.",
+        conversationHistory: body.conversationHistory || [],
+        availableActions: ["ask_question"]
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!body.allAvailableSlots || body.allAvailableSlots.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: "No time slots available to discuss. Please generate initial suggestions first.",
+        conversationHistory: body.conversationHistory || [],
+        availableActions: ["generate_initial_suggestions"]
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Handle special commands
+    const message = body.message.toLowerCase().trim();
+    
+    if (message.includes('next 3') || message.includes('show more') || message.includes('more options')) {
+      // User wants the next best 3 options
+      const nextSlots = getNextBestSlots(body.allAvailableSlots, body.currentSuggestions, 3);
+      
+      if (nextSlots.length === 0) {
+        return new Response(JSON.stringify({
+          success: true,
+          message: "I've already shown you all the available time slots that meet your criteria. Would you like me to explain any of the current options in more detail?",
+          conversationHistory: [
+            ...body.conversationHistory,
+            {
+              role: "user",
+              content: body.message,
+              timestamp: new Date().toISOString()
+            },
+            {
+              role: "assistant",
+              content: "No more time slots available - all options shown",
+              timestamp: new Date().toISOString()
+            }
+          ],
+          availableActions: ["explain_current", "ask_question"]
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const slotsDescription = nextSlots.map((slot, index) => 
+        `${index + 1}. ${new Date(slot.timeslot.startISO).toLocaleString()} - ${new Date(slot.timeslot.endISO).toLocaleString()} (Score: ${slot.score})`
+      ).join('\n');
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: `Here are the next 3 best available time slots:\n\n${slotsDescription}\n\nWould you like me to explain why these times work well, or do you have questions about any specific slot?`,
+        newSuggestions: nextSlots,
+        conversationHistory: [
+          ...body.conversationHistory,
+          {
+            role: "user",
+            content: body.message,
+            timestamp: new Date().toISOString()
+          },
+          {
+            role: "assistant",
+            content: `Provided next 3 best time slots`,
+            timestamp: new Date().toISOString()
+          }
+        ],
+        availableActions: ["explain_current", "show_next_3", "ask_question"],
+        metadata: {
+          totalSlotsRemaining: Math.max(0, body.allAvailableSlots.length - body.currentSuggestions.length - nextSlots.length),
+          suggestionsChanged: true
+        }
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // For all other messages, use the AI chatbot
+    const chatResponse = await chatWithSchedulingAssistant(body);
+    
+    return new Response(JSON.stringify(chatResponse), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    console.error("Error in chat handler:", error);
+    return new Response(JSON.stringify({
+      success: false,
+      message: "I encountered an error while processing your message. Please try again or ask a different question.",
+      conversationHistory: [],
+      availableActions: ["try_again", "ask_question"]
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
