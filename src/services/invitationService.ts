@@ -44,11 +44,13 @@ export class InvitationService {
 
   // Send group invitation email
   private static async sendGroupInvitationEmail(
-    email: string, 
-    token: string, 
+    email: string,
+    token: string,
     groupId: string
   ): Promise<void> {
-    const invitationLink = `${window.location.origin}/invite/${token}`;
+    // For local development, use localhost. For production, this should be your deployed URL
+    const baseUrl = import.meta.env.VITE_FRONTEND_URL || 'http://localhost:5173';
+    const invitationLink = `${baseUrl}/invite/${token}`;
     
     try {
       // Call your existing backend email service
@@ -102,7 +104,9 @@ export class InvitationService {
     token: string, 
     meetingId: string
   ): Promise<void> {
-    const invitationLink = `${window.location.origin}/invite/${token}`;
+    // For local development, use localhost. For production, this should be your deployed URL
+    const baseUrl = import.meta.env.VITE_FRONTEND_URL || 'http://localhost:5173';
+    const invitationLink = `${baseUrl}/invite/${token}`;
     
     try {
       // Call your existing backend email service
