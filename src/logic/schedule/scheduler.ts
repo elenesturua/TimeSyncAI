@@ -532,7 +532,15 @@ export class Schedule {
       this.ScoredTimeIntervals = [];
       
       // Iterate through each day in the date range
-      for (let currentDate = new Date(startDateObj); currentDate <= endDateObj; currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000)) {
+      // Use local dates to avoid timezone issues
+      const startDate = startDateObj.toISOString().split('T')[0]; // Get YYYY-MM-DD
+      const endDate = endDateObj.toISOString().split('T')[0];
+      
+      // Parse dates in local timezone
+      const currentDateObj = new Date(startDate + 'T00:00:00'); // Local midnight
+      
+      while (currentDateObj <= endDateObj) {
+        const currentDate = new Date(currentDateObj);
         // Generate time slots for this day using the first user's working hours as reference
         let referenceUser = allUsers.find(user => user.importance === 'High');
         if (!referenceUser) {
@@ -560,6 +568,9 @@ export class Schedule {
             participants: participants
           });
         }
+        
+        // Move to next day in local time
+        currentDateObj.setDate(currentDateObj.getDate() + 1);
       }
       
       // Sort by score (highest first)
