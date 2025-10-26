@@ -521,10 +521,17 @@ export async function chatWithSchedulingAssistant(chatRequest: ChatRequest): Pro
     // Use import.meta.env instead of process.env for Vite
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
+    console.log('🔑 Checking API key:', {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length || 0,
+      envVars: Object.keys(import.meta.env).filter(k => k.startsWith('VITE_'))
+    });
+    
     if (!apiKey) {
+      console.error('❌ No Gemini API key found. Set VITE_GEMINI_API_KEY in your .env file.');
       return {
         success: false,
-        message: "I'm sorry, but the AI assistant is not available right now. However, I can help you explore the available time slots manually.",
+        message: "I'm sorry, but the AI assistant is not available right now. Please set up your Gemini API key to use the AI chat feature.",
         conversationHistory: [
           ...chatRequest.conversationHistory,
           {
@@ -534,7 +541,7 @@ export async function chatWithSchedulingAssistant(chatRequest: ChatRequest): Pro
           },
           {
             role: "assistant", 
-            content: "AI assistant unavailable - manual exploration available",
+            content: "AI assistant unavailable - API key not configured",
             timestamp: new Date().toISOString()
           }
         ],
