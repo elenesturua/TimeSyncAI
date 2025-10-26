@@ -257,6 +257,66 @@ export default function PlanMeeting() {
     }
   };
 
+  // Send invitations with specific meeting time
+  const sendInvitationsWithTime = async (suggestion: Suggestion) => {
+    if (!currentUser || !meetingId || !account) return;
+    
+    setIsCreatingMeeting(true);
+    try {
+      // Convert UTC-5 times to UTC for proper email/invite handling
+      const startUTC = new Date(suggestion.startISO);
+      startUTC.setHours(startUTC.getHours() + 5); // Convert from UTC-5 to UTC
+      const endUTC = new Date(suggestion.endISO);
+      endUTC.setHours(endUTC.getHours() + 5); // Convert from UTC-5 to UTC
+      
+      console.log('📧 Sending invitations with meeting time:', {
+        startISO: suggestion.startISO,
+        endISO: suggestion.endISO,
+        startUTC: startUTC.toISOString(),
+        endUTC: endUTC.toISOString()
+      });
+
+      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const backendUrl = isDevelopment ? 'http://localhost:3001/api/send-invite' : '/api/send-invite';
+
+      const invitationPromises = participants.map(async (participant) => {
+        const emailPayload = {
+          to: participant.email,
+          organizerName: account.name || 'Meeting Organizer',
+          organizerEmail: account.username,
+          plan: `You've been invited to a meeting scheduled via TimeSyncAI.`,
+          meeting: {
+            title: 'Team Meeting',
+            description: 'Meeting scheduled via TimeSyncAI',
+            location: 'Virtual Meeting',
+            startISO: startUTC.toISOString(),
+            endISO: endUTC.toISOString(),
+            timezone: 'America/Chicago'
+          }
+        };
+        
+        const response = await fetch(backendUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(emailPayload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to send invitation to ${participant.email}`);
+        }
+        
+        console.log(`✅ Invitation sent to ${participant.email}`);
+      });
+
+      await Promise.all(invitationPromises);
+      console.log('✅ All invitations sent successfully!');
+    } catch (error) {
+      console.error('Error sending invitations:', error);
+    } finally {
+      setIsCreatingMeeting(false);
+    }
+  };
+
   // Create meeting in Firebase
   const createMeeting = async () => {
     if (!currentUser) return;
@@ -548,8 +608,17 @@ export default function PlanMeeting() {
 
   const handleBook = async (booking: any) => {
     try {
-      // Send invitations to participants via Firebase
-      await sendInvitations();
+      console.log('📅 Booking meeting with time:', {
+        start: selectedSuggestion?.startISO || booking.startTime,
+        end: selectedSuggestion?.endISO || booking.endTime,
+      });
+      
+      // Send invitations to participants via Firebase with the actual meeting time
+      if (selectedSuggestion) {
+        await sendInvitationsWithTime(selectedSuggestion);
+      } else {
+        await sendInvitations();
+      }
       
       // Update meeting with scheduled time
       if (meetingId) {
