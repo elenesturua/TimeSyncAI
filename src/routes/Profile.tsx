@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { User, Clock, Globe, LogOut, RefreshCw } from 'lucide-react';
+import { User, Clock, Globe, LogOut, RefreshCw, Users } from 'lucide-react';
 import { useMsal, AuthenticatedTemplate, UnauthenticatedTemplate } from '@azure/msal-react';
-import HoursChips from '@/components/HoursChips';
 import Loader from '@/components/Loader';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
+import { ParticipantGroup, User as FirestoreUser } from '@/types/firestore';
 
 export default function Profile() {
   const { instance, accounts } = useMsal();
@@ -10,28 +12,101 @@ export default function Profile() {
   const account = accounts[0];
   const isAuthenticated = accounts.length > 0;
   
-  const [preferredHours, setPreferredHours] = useState({ start: '09:00', end: '17:00' });
-  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const [phone, setPhone] = useState('');
+  const [currentUser, setCurrentUser] = useState<FirestoreUser | null>(null);
+  const [connections, setConnections] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
 
   useEffect(() => {
-    // Load user preferences from localStorage or API
-    const savedHours = localStorage.getItem('preferredHours');
-    const savedPhone = localStorage.getItem('phone');
-    
-    if (savedHours) {
-      setPreferredHours(JSON.parse(savedHours));
+    if (isAuthenticated && account) {
+      initializeCurrentUser();
     }
-    if (savedPhone) {
-      setPhone(savedPhone);
-    }
-  }, []);
+  }, [isAuthenticated, account]);
 
-  const handleSavePreferences = () => {
-    localStorage.setItem('preferredHours', JSON.stringify(preferredHours));
-    localStorage.setItem('phone', phone);
-    // TODO: Save to backend API
+  useEffect(() => {
+    if (currentUser) {
+      loadConnections();
+    }
+  }, [currentUser]);
+
+  const initializeCurrentUser = async () => {
+    if (!account) return;
+    
+    try {
+      const userQuery = query(
+        collection(db, 'users'),
+        where('email', '==', account.username)
+      );
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (!userSnapshot.empty) {
+        const userDoc = userSnapshot.docs[0];
+        const userData = { id: userDoc.id, ...userDoc.data() } as FirestoreUser;
+        setCurrentUser(userData);
+      }
+    } catch (error) {
+      console.error('Error loading user:', error);
+    }
+  };
+
+  const loadConnections = async () => {
+    if (!currentUser) return;
+    
+    setIsLoading(true);
+    try {
+      // Get all groups where user is owner or participant
+      const ownerGroupsQuery = query(
+        collection(db, 'participantGroups'),
+        where('ownerId', '==', currentUser.id)
+      );
+      const ownerSnapshot = await getDocs(ownerGroupsQuery);
+      
+      const participantGroupsQuery = query(
+        collection(db, 'participantGroups'),
+        where('participants', 'array-contains', currentUser.id)
+      );
+      const participantSnapshot = await getDocs(participantGroupsQuery);
+      
+      // Combine and get unique group IDs
+      const allGroups = [
+        ...ownerSnapshot.docs.map(doc => doc.id),
+        ...participantSnapshot.docs.map(doc => doc.id)
+      ];
+      const uniqueGroupIds = [...new Set(allGroups)];
+      
+      // Get all participants from all groups
+      const allParticipantIds = new Set<string>();
+      for (const groupId of uniqueGroupIds) {
+        const groupDoc = await getDoc(doc(collection(db, 'participantGroups'), groupId));
+        const groupData = groupDoc.data() as ParticipantGroup;
+        if (groupData.participants) {
+          groupData.participants.forEach(p => allParticipantIds.add(p));
+        }
+        // Also add the owner
+        if (groupData.ownerId) {
+          allParticipantIds.add(groupData.ownerId);
+        }
+      }
+      
+      // Get user details for all connections
+      const connectionsData = await Promise.all(
+        Array.from(allParticipantIds).map(async (userId) => {
+          const userDoc = await getDoc(doc(collection(db, 'users'), userId));
+          const userData = userDoc.data() as FirestoreUser;
+          return {
+            id: userId,
+            email: userData?.email,
+            displayName: userData?.displayName
+          };
+        })
+      );
+      
+      setConnections(connectionsData);
+    } catch (error) {
+      console.error('Error loading connections:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleReconnectOutlook = async () => {
@@ -99,62 +174,6 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Preferences */}
-          <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Clock className="h-5 w-5 mr-2" />
-              Preferences
-            </h2>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Preferred Hours
-                </label>
-                <HoursChips value={preferredHours} onChange={setPreferredHours} />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Timezone
-                </label>
-                <select
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="input-field"
-                >
-                  <option value="America/New_York">Eastern Time (ET)</option>
-                  <option value="America/Chicago">Central Time (CT)</option>
-                  <option value="America/Denver">Mountain Time (MT)</option>
-                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                  <option value="UTC">UTC</option>
-                  <option value="Europe/London">London (GMT)</option>
-                  <option value="Europe/Paris">Paris (CET)</option>
-                  <option value="Asia/Tokyo">Tokyo (JST)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number (Optional)
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+1 (555) 123-4567"
-                  className="input-field"
-                />
-              </div>
-
-              <button
-                onClick={handleSavePreferences}
-                className="btn-primary"
-              >
-                Save Preferences
-              </button>
-            </div>
-          </div>
 
           {/* Calendar Connection */}
           <div className="card">
@@ -190,6 +209,44 @@ export default function Profile() {
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Connections */}
+          <div className="card">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Users className="h-5 w-5 mr-2" />
+              Connections
+            </h2>
+            
+            {isLoading ? (
+              <div className="text-center py-8">
+                <Loader size="md" />
+              </div>
+            ) : connections.length === 0 ? (
+              <p className="text-gray-600 text-center py-8">
+                No connections yet. Create or join groups to see your connections.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {connections.map((connection) => (
+                  <div key={connection.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
+                        <span className="text-primary-600 font-medium">
+                          {(connection.displayName || connection.email)?.[0]?.toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {connection.displayName || connection.email}
+                        </p>
+                        <p className="text-sm text-gray-600">{connection.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Actions */}
