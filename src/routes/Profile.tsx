@@ -101,7 +101,9 @@ export default function Profile() {
         })
       );
       
-      setConnections(connectionsData);
+      // Filter out the current user from connections
+      const filteredConnections = connectionsData.filter(conn => conn.id !== currentUser.id);
+      setConnections(filteredConnections);
     } catch (error) {
       console.error('Error loading connections:', error);
     } finally {
