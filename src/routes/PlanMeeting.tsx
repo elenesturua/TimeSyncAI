@@ -581,7 +581,7 @@ export default function PlanMeeting() {
     }
   };
 
-  const connectCalendar = async () => {
+  const syncAllCalendars = async () => {
     if (!account) {
       instance.loginRedirect({
         scopes: ['Calendars.Read', 'Calendars.ReadWrite']
@@ -597,14 +597,14 @@ export default function PlanMeeting() {
         account: account
       });
 
-      // Create Graph client and fetch data
-      const graphClient = createGraphClient(instance as any);
+      console.log('🔄 Syncing calendars for all participants...');
       
-      // Get user profile
-      const profile = await getUserProfile(graphClient);
-      setUserProfile(profile);
+      // Create list of all emails to sync (current user + participants)
+      const emailsToSync = [
+        account.username,
+        ...participants.map(p => p.email)
+      ];
       
-      // Get calendar events for the specified date range (from dateRange state)
       const startDate = dateRange.start ? new Date(dateRange.start) : new Date();
       const endDate = dateRange.end ? new Date(dateRange.end) : new Date();
       
@@ -613,19 +613,57 @@ export default function PlanMeeting() {
         endDate.setDate(startDate.getDate() + 7);
       }
       
+      // Get calendar events for current user
+      const graphClient = createGraphClient(instance as any);
+      const profile = await getUserProfile(graphClient);
+      setUserProfile(profile);
+      
       const events = await getCalendarEvents(graphClient, startDate, endDate);
       setCalendarEvents(events);
       
-      // Store calendar events in Firestore for scheduler to use
+      // Store current user's calendar events in Firestore
       if (currentUser) {
         await CalendarService.syncUserCalendar(currentUser.id, instance as any);
-        console.log(`Stored ${events.length} calendar events in Firestore for user ${currentUser.id}`);
+        console.log(`✅ Synced ${events.length} events for ${account.username}`);
+      }
+      
+      // For each participant, check if they have calendar data
+      // If not, they'll be treated as available during working hours
+      let syncedCount = 0;
+      for (const email of emailsToSync) {
+        if (email === account.username) continue; // Already synced above
+        
+        try {
+          const userQuery = query(
+            collection(db, 'users'),
+            where('email', '==', email)
+          );
+          const userSnapshot = await getDocs(userQuery);
+          
+          if (!userSnapshot.empty) {
+            const userId = userSnapshot.docs[0].id;
+            const syncRecordQuery = query(
+              collection(db, 'calendarSync'),
+              where('userId', '==', userId)
+            );
+            const syncSnapshot = await getDocs(syncRecordQuery);
+            
+            if (syncSnapshot.empty || syncSnapshot.docs[0].data().syncStatus === 'error') {
+              console.log(`⚠️ Participant ${email} has no calendar data - they need to connect their calendar`);
+            } else {
+              syncedCount++;
+            }
+          } else {
+            console.log(`⚠️ Participant ${email} not found in Firestore - they need to sign in`);
+          }
+        } catch (error) {
+          console.error(`Error checking sync status for ${email}:`, error);
+        }
       }
       
       setIsCalendarConnected(true);
       
-      console.log('Calendar connected successfully!');
-      console.log(`Fetched ${events.length} calendar events for date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      console.log(`✅ Calendar sync complete! Synced data for ${syncedCount + 1} participants`);
       
       // Debug: Show calendar events in UI
       if (events.length > 0) {
@@ -638,7 +676,7 @@ export default function PlanMeeting() {
       }
       
     } catch (error) {
-      console.error('Failed to connect calendar:', error);
+      console.error('Failed to sync calendars:', error);
       setIsCalendarConnected(false);
     } finally {
       setIsLoadingCalendar(false);
@@ -1129,27 +1167,40 @@ export default function PlanMeeting() {
                   
                   {!isCalendarConnected ? (
                     <button
-                      onClick={connectCalendar}
+                      onClick={syncAllCalendars}
                       disabled={isLoadingCalendar}
                       className="btn-primary flex items-center space-x-2"
                     >
                       {isLoadingCalendar ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          <span>Connecting...</span>
+                          <span>Syncing...</span>
                         </>
                       ) : (
                         <>
-                          <Calendar className="h-4 w-4" />
-                          <span>Connect</span>
+                          <Clock className="h-4 w-4" />
+                          <span>Sync All Calendars</span>
                         </>
                       )}
                     </button>
                   ) : (
-                    <div className="flex items-center space-x-2 text-green-600">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="text-sm font-medium">Connected</span>
-                    </div>
+                    <button
+                      onClick={syncAllCalendars}
+                      disabled={isLoadingCalendar}
+                      className="btn-secondary flex items-center space-x-2"
+                    >
+                      {isLoadingCalendar ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Syncing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Clock className="h-4 w-4" />
+                          <span>Resync</span>
+                        </>
+                      )}
+                    </button>
                   )}
                 </div>
                 
