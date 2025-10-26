@@ -28,8 +28,9 @@ const Payload = z.object({
 });
 
 function toParts(iso: string, tz: string) {
-  // ICS lib wants local parts; Outlook/Gmail will render correctly with METHOD:REQUEST
-  const dt = DateTime.fromISO(iso, { zone: tz });
+  // ICS lib wants local parts; convert UTC to local timezone
+  // First parse as UTC, then convert to target timezone
+  const dt = DateTime.fromISO(iso, { zone: 'utc' }).setZone(tz);
   return [dt.year, dt.month, dt.day, dt.hour, dt.minute] as [number, number, number, number, number];
 }
 
