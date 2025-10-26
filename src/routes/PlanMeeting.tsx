@@ -182,6 +182,19 @@ export default function PlanMeeting() {
         
         const docRef = await addDoc(collection(db, 'users'), newUser);
         setCurrentUser({ id: docRef.id, ...newUser });
+        
+        // Automatically sync calendar for new users
+        console.log('🔄 Syncing calendar for new user...');
+        try {
+          await CalendarService.syncUserCalendar(docRef.id, instance);
+          await updateDoc(doc(db, 'users', docRef.id), {
+            calendarConnected: true,
+          });
+          setCurrentUser(prev => prev ? { ...prev, calendarConnected: true } : null);
+          console.log('✅ Calendar synced successfully');
+        } catch (error) {
+          console.error('⚠️ Failed to sync calendar:', error);
+        }
       } else {
         // User exists, update last active
         const userDoc = userSnapshot.docs[0];
@@ -192,6 +205,21 @@ export default function PlanMeeting() {
         });
         
         setCurrentUser(userData);
+        
+        // If calendar not connected, try to sync it
+        if (!userData.calendarConnected) {
+          console.log('🔄 User calendar not connected, attempting to sync...');
+          try {
+            await CalendarService.syncUserCalendar(userDoc.id, instance);
+            await updateDoc(doc(db, 'users', userDoc.id), {
+              calendarConnected: true,
+            });
+            setCurrentUser(prev => prev ? { ...prev, calendarConnected: true } : null);
+            console.log('✅ Calendar synced successfully');
+          } catch (error) {
+            console.error('⚠️ Failed to sync calendar:', error);
+          }
+        }
       }
     } catch (error) {
       console.error('Error initializing user:', error);
