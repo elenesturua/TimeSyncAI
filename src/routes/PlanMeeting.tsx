@@ -280,9 +280,12 @@ export default function PlanMeeting() {
       const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       const backendUrl = isDevelopment ? 'http://localhost:3001/api/send-invite' : '/api/send-invite';
 
-      const invitationPromises = participants.map(async (participant) => {
+      // Include current user (admin) in the recipient list
+      const allRecipients = [...participants.map(p => p.email), account.username];
+      
+      const invitationPromises = allRecipients.map(async (email) => {
         const emailPayload = {
-          to: participant.email,
+          to: email,
           organizerName: account.name || 'Meeting Organizer',
           organizerEmail: account.username,
           plan: `You've been invited to a meeting scheduled via TimeSyncAI.`,
@@ -303,10 +306,10 @@ export default function PlanMeeting() {
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to send invitation to ${participant.email}`);
+          throw new Error(`Failed to send invitation to ${email}`);
         }
         
-        console.log(`✅ Invitation sent to ${participant.email}`);
+        console.log(`✅ Invitation sent to ${email}`);
       });
 
       await Promise.all(invitationPromises);
@@ -610,8 +613,8 @@ export default function PlanMeeting() {
   const handleBook = async (booking: any) => {
     try {
       console.log('📅 Booking meeting with time:', {
-        start: selectedSuggestion?.startISO || booking.startTime,
-        end: selectedSuggestion?.endISO || booking.endTime,
+        start:  (selectedSuggestion?.startISO || booking.startTime),
+        end:    (selectedSuggestion?.endISO || booking.endTime),
       });
       
       // Send invitations to participants via Firebase with the actual meeting time
@@ -635,14 +638,20 @@ export default function PlanMeeting() {
       
       console.log('Meeting booked and invitations sent:', booking);
       
-      // Navigate to success page
+      // Navigate to success page with proper meeting data
       navigate('/meeting-sent', { 
         state: { 
-          booking: {
-            ...booking,
-            meetingLink: 'https://teams.microsoft.com/l/meetup-join/...',
-            attendees: participants.map(p => p.email),
-            meetingId: meetingId
+          meetingData: {
+            name: 'Team Meeting',
+            location: 'Virtual Meeting',
+            participants: [
+              ...participants.map(p => p.email),
+              account?.username || ''
+            ],
+            startTime: selectedSuggestion?.startISO || booking.startTime,
+            endTime: selectedSuggestion?.endISO || booking.endTime,
+            duration: duration,
+            id: meetingId
           }
         } 
       });
