@@ -35,6 +35,8 @@ export class AISchedulingService {
     msalInstance: IPublicClientApplication
   ): Promise<Suggestion[]> {
     try {
+      console.log('Starting AI suggestion generation for:', request.participants.map(p => p.email));
+      
       // 1. Fetch calendar data for all participants
       const participantData = await this.fetchParticipantCalendars(
         request.participants,
@@ -43,14 +45,29 @@ export class AISchedulingService {
         msalInstance
       );
 
+      console.log(`Participant data loaded: ${participantData.length} participants`);
+      console.log(`Request params:`, {
+        startDate: request.startDate,
+        endDate: request.endDate,
+        duration: request.durationMinutes,
+        workingHours: request.workingHours
+      });
+
       // 2. Convert to AI input format
       const aiInput = this.convertToAIInput(participantData, request);
 
+      console.log('Calling generateScoredSlots...');
+      
       // 3. Call AI to generate scored slots
       const scoredSlots = await generateScoredSlots(aiInput);
 
+      console.log(`Generated ${scoredSlots.length} scored slots`);
+
       // 4. Convert to UI-friendly suggestions
-      return this.convertToSuggestions(scoredSlots, request.participants);
+      const suggestions = this.convertToSuggestions(scoredSlots, request.participants);
+      console.log(`Converted to ${suggestions.length} UI suggestions`);
+      
+      return suggestions;
     } catch (error) {
       console.error('Error generating AI suggestions:', error);
       return [];
@@ -67,19 +84,29 @@ export class AISchedulingService {
     endDate: string,
     msalInstance: IPublicClientApplication
   ): Promise<ParticipantInput[]> {
+    console.log(`Fetching calendars for ${participants.length} participants`);
+    
     // Fetch calendars in parallel for efficiency
     const calendarPromises = participants.map(async (participant) => {
       try {
         const account = msalInstance.getActiveAccount();
-        if (!account) throw new Error('No active account');
+        if (!account) {
+          console.error('No active account for participant:', participant.email);
+          throw new Error('No active account');
+        }
 
         // Get calendar events (only free/busy, not details)
         const graphClient = createGraphClient(msalInstance);
+        
+        console.log(`Fetching calendar for participant: ${participant.email}`);
+        
         const events = await getCalendarEvents(
           graphClient,
           new Date(startDate),
           new Date(endDate)
         );
+
+        console.log(`Found ${events.length} total events for ${participant.email}`);
 
         // Convert to busy windows (exclude 'free' events)
         const busy = events
@@ -89,7 +116,7 @@ export class AISchedulingService {
             endISO: event.end.dateTime
           }));
 
-        console.log(`Fetched ${busy.length} busy periods for ${participant.email}`);
+        console.log(`Extracted ${busy.length} busy periods for ${participant.email}`);
 
         return {
           id: participant.email,
@@ -121,7 +148,9 @@ export class AISchedulingService {
       }
     });
 
-    return Promise.all(calendarPromises);
+    const result = await Promise.all(calendarPromises);
+    console.log(`Fetched calendars for all participants. Total busy periods: ${result.reduce((sum, p) => sum + p.busy.length, 0)}`);
+    return result;
   }
 
   /**
