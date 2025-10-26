@@ -263,17 +263,20 @@ export default function PlanMeeting() {
     
     setIsCreatingMeeting(true);
     try {
-      // Convert UTC-5 times to UTC for proper email/invite handling
+      // suggestion.startISO and endISO are already in UTC-5 format
+      // We need to convert them to proper UTC for the backend
       const startUTC = new Date(suggestion.startISO);
       startUTC.setHours(startUTC.getHours() + 5); // Convert from UTC-5 to UTC
       const endUTC = new Date(suggestion.endISO);
       endUTC.setHours(endUTC.getHours() + 5); // Convert from UTC-5 to UTC
       
       console.log('📧 Sending invitations with meeting time:', {
-        startISO: suggestion.startISO,
-        endISO: suggestion.endISO,
-        startUTC: startUTC.toISOString(),
-        endUTC: endUTC.toISOString()
+        startISO_original: suggestion.startISO,
+        endISO_original: suggestion.endISO,
+        startUTC_converted: startUTC.toISOString(),
+        endUTC_converted: endUTC.toISOString(),
+        startTime_local: new Date(suggestion.startISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        endTime_local: new Date(suggestion.endISO).toLocaleString('en-US', { timeZone: 'America/Chicago' })
       });
 
       const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
