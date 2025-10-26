@@ -11,6 +11,9 @@ export default function MeetingSent() {
   
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [groupSaved, setGroupSaved] = useState(false);
+  
+  // Check if this is a scheduled meeting (has startTime/endTime) or just group invitations
+  const isScheduledMeeting = meetingData?.startTime && meetingData?.endTime;
 
   if (!meetingData) {
     return (
@@ -59,7 +62,9 @@ export default function MeetingSent() {
         
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Invitations Sent!</h1>
         <p className="text-gray-600 mb-6">
-          Meeting invitations have been sent to all participants. They can now connect their calendars and find the perfect time.
+          {isScheduledMeeting 
+            ? 'Meeting invitations have been sent to all participants. They can now connect their calendars and find the perfect time.'
+            : 'Group invitations have been sent to all participants. They can now connect their calendars and find the perfect meeting times.'}
         </p>
 
         {/* Meeting Details */}
@@ -100,49 +105,57 @@ export default function MeetingSent() {
           </div>
         </div>
 
-        {/* Meeting Link */}
-        <div className="bg-blue-50 rounded-lg p-4 mb-6">
-          <p className="text-sm text-blue-700 mb-2">Meeting Link:</p>
-          <div className="flex items-center space-x-2">
-            <code className="flex-1 text-sm bg-white p-2 rounded border text-gray-800">
-              {meetingLink}
-            </code>
-            <CopyButton text={meetingLink} />
-          </div>
-        </div>
+        {/* Meeting Link - only show for scheduled meetings */}
+        {isScheduledMeeting && (
+          <>
+            <div className="bg-blue-50 rounded-lg p-4 mb-6">
+              <p className="text-sm text-blue-700 mb-2">Meeting Link:</p>
+              <div className="flex items-center space-x-2">
+                <code className="flex-1 text-sm bg-white p-2 rounded border text-gray-800">
+                  {meetingLink}
+                </code>
+                <CopyButton text={meetingLink} />
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Actions */}
         <div className="space-y-3 mb-6">
-          <button
-            onClick={handleViewMeeting}
-            className="w-full flex items-center justify-center space-x-2 btn-primary"
-          >
-            <Eye className="h-4 w-4" />
-            <span>View Meeting Room</span>
-          </button>
+          {isScheduledMeeting && (
+            <button
+              onClick={handleViewMeeting}
+              className="w-full flex items-center justify-center space-x-2 btn-primary"
+            >
+              <Eye className="h-4 w-4" />
+              <span>View Meeting Room</span>
+            </button>
+          )}
 
-          <button
-            onClick={handleSaveAsGroup}
-            disabled={isSavingGroup || groupSaved}
-            className="w-full flex items-center justify-center space-x-2 btn-secondary"
-          >
-            {isSavingGroup ? (
-              <>
-                <Loader size="sm" />
-                <span>Saving...</span>
-              </>
-            ) : groupSaved ? (
-              <>
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span>Saved as Group</span>
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                <span>Save as Group</span>
-              </>
-            )}
-          </button>
+          {!isScheduledMeeting && (
+            <button
+              onClick={handleSaveAsGroup}
+              disabled={isSavingGroup || groupSaved}
+              className="w-full flex items-center justify-center space-x-2 btn-secondary"
+            >
+              {isSavingGroup ? (
+                <>
+                  <Loader size="sm" />
+                  <span>Saving...</span>
+                </>
+              ) : groupSaved ? (
+                <>
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span>Saved as Group</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Save as Group</span>
+                </>
+              )}
+            </button>
+          )}
           
           {groupSaved && (
             <p className="text-sm text-green-600">
