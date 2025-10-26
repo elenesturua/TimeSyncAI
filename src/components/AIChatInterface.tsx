@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, MessageCircle, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
+import { chatWithSchedulingAssistant } from '@/logic/gemini-selection/selector';
 import type { ChatMessage } from '@/logic/gemini-selection/selector';
 
 interface AIChatInterfaceProps {
@@ -62,29 +63,16 @@ export default function AIChatInterface({
     setIsTyping(true);
 
     try {
-      // Call AI chat function via serverless function
-      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiUrl = isDevelopment ? 'http://localhost:3001/api/chat' : '/api/chat';
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage,
-          conversationHistory: messages,
-          currentSuggestions: [],
-          allAvailableSlots: allSlots,
-          participants: [], // Will be populated from context
-          preferences: {},
-          contextNotes: ''
-        })
+      // Call AI chat function directly
+      const responseData = await chatWithSchedulingAssistant({
+        message: userMessage,
+        conversationHistory: messages,
+        currentSuggestions: [],
+        allAvailableSlots: allSlots,
+        participants: [], // Will be populated from context
+        preferences: {},
+        contextNotes: ''
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const responseData = await response.json();
 
       // Add assistant response
       const assistantMessage: ChatMessage = {
