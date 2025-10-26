@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, Users, Copy, Share2 } from 'lucide-react';
+import { Calendar, Clock, Users, Share2 } from 'lucide-react';
 import DurationPills from '@/components/DurationPills';
 import HoursChips from '@/components/HoursChips';
 import CopyButton from '@/components/CopyButton';

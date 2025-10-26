@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Mail, CheckCircle, Clock, UserPlus, Settings, Calendar, X } from 'lucide-react';
+import { Users, Plus, Mail, Calendar, X } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, getDocs, query, where, orderBy, deleteDoc } from 'firebase/firestore';
-import { ParticipantGroup, User as FirestoreUser, MeetingInvitation } from '@/types/firestore';
+import { collection, addDoc, doc, updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
+import { ParticipantGroup, User as FirestoreUser } from '@/types/firestore';
 import { testFirebaseConnection } from '@/utils/firebaseTest';
 import { InvitationService } from '@/services/invitationService';
 
@@ -18,7 +18,7 @@ interface Participant {
 
 export default function GroupManagement() {
   const navigate = useNavigate();
-  const { instance, accounts } = useMsal();
+  const { accounts } = useMsal();
   const account = accounts[0];
   const isAuthenticated = accounts.length > 0;
   
@@ -101,8 +101,8 @@ export default function GroupManagement() {
       }
     } catch (error) {
       console.error('❌ Error initializing user:', error);
-      console.error('❌ Error details:', error.message);
-      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Error details:', (error as Error).message);
+      console.error('❌ Error stack:', (error as Error).stack);
     }
   };
 
@@ -135,61 +135,6 @@ export default function GroupManagement() {
       console.error('Error loading groups:', error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadGroupParticipants = async (groupId: string): Promise<Participant[]> => {
-    try {
-      // Get all invitations for this group
-      const invitationsQuery = query(
-        collection(db, 'invitations'),
-        where('meetingId', '==', groupId) // Using meetingId to store groupId for now
-      );
-      
-      const invitationsSnapshot = await getDocs(invitationsQuery);
-      const invitations = invitationsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as MeetingInvitation[];
-      
-      // Get user details for accepted invitations
-      const participants: Participant[] = [];
-      
-      for (const invitation of invitations) {
-        if (invitation.inviteeId) {
-          // User has accepted invitation
-          const userQuery = query(
-            collection(db, 'users'),
-            where('id', '==', invitation.inviteeId)
-          );
-          const userSnapshot = await getDocs(userQuery);
-          
-          if (!userSnapshot.empty) {
-            const userDoc = userSnapshot.docs[0];
-            const userData = { id: userDoc.id, ...userDoc.data() } as FirestoreUser;
-            
-            participants.push({
-              email: invitation.inviteeEmail,
-              name: userData.displayName,
-              status: 'connected',
-              userId: userData.id,
-              invitationId: invitation.id
-            });
-          }
-        } else {
-          // Pending invitation
-          participants.push({
-            email: invitation.inviteeEmail,
-            status: invitation.status === 'pending' ? 'pending' : 'accepted',
-            invitationId: invitation.id
-          });
-        }
-      }
-      
-      return participants;
-    } catch (error) {
-      console.error('Error loading group participants:', error);
-      return [];
     }
   };
 
@@ -280,8 +225,8 @@ export default function GroupManagement() {
       console.log('🎉 Group creation completed successfully!');
     } catch (error) {
       console.error('❌ Error creating group:', error);
-      console.error('❌ Error details:', error.message);
-      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Error details:', (error as Error).message);
+      console.error('❌ Error stack:', (error as Error).stack);
       
       // Show user-friendly error message
       alert('Failed to create group. Please check your email configuration and try again.');
@@ -336,8 +281,8 @@ export default function GroupManagement() {
       );
       const invitationsSnapshot = await getDocs(invitationsQuery);
       
-      const deleteInvitationPromises = invitationsSnapshot.docs.map(doc => 
-        deleteDoc(doc(db, 'invitations', doc.id))
+      const deleteInvitationPromises = invitationsSnapshot.docs.map(docSnapshot => 
+        deleteDoc(doc(db, 'invitations', docSnapshot.id))
       );
       await Promise.all(deleteInvitationPromises);
       
@@ -372,8 +317,8 @@ export default function GroupManagement() {
       const groupsSnapshot = await getDocs(groupsQuery);
       
       // Delete all groups
-      const deleteGroupPromises = groupsSnapshot.docs.map(doc => 
-        deleteDoc(doc(db, 'participantGroups', doc.id))
+      const deleteGroupPromises = groupsSnapshot.docs.map(docSnapshot => 
+        deleteDoc(doc(db, 'participantGroups', docSnapshot.id))
       );
       await Promise.all(deleteGroupPromises);
       
@@ -385,8 +330,8 @@ export default function GroupManagement() {
       );
       const invitationsSnapshot = await getDocs(invitationsQuery);
       
-      const deleteInvitationPromises = invitationsSnapshot.docs.map(doc => 
-        deleteDoc(doc(db, 'invitations', doc.id))
+      const deleteInvitationPromises = invitationsSnapshot.docs.map(docSnapshot => 
+        deleteDoc(doc(db, 'invitations', docSnapshot.id))
       );
       await Promise.all(deleteInvitationPromises);
       

@@ -1,4 +1,4 @@
-import { Shield, Eye } from 'lucide-react';
+import { Shield } from 'lucide-react';
 
 export default function PrivacyBanner() {
   return (

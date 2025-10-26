@@ -3,7 +3,7 @@ import { Table } from 'react-bootstrap';
 export const IdTokenData = (props: { idTokenClaims: any }) => {
     const tokenClaims = createClaimsTable(props.idTokenClaims);
 
-    const tableRow = Object.keys(tokenClaims).map((key, index) => {
+    const tableRow = Object.keys(tokenClaims).map((key) => {
         return (
             <tr key={key}>
                 {tokenClaims[key].map((claimItem: any) => (

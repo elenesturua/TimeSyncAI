@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, Users, Settings, LogIn, RefreshCw, Clock, Star, CheckCircle } from 'lucide-react';
+import { Calendar, Users, Settings, RefreshCw, Star } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import ParticipantCard from '@/components/ParticipantCard';
 import SuggestionCard from '@/components/SuggestionCard';
@@ -56,7 +56,6 @@ export default function MeetingRoom() {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [allowAbsences, setAllowAbsences] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -250,7 +249,15 @@ export default function MeetingRoom() {
 
           <div className="space-y-3">
             {participants.map((participant, index) => (
-              <ParticipantCard key={index} participant={participant} />
+              <ParticipantCard 
+                key={index} 
+                participant={{
+                  email: participant.email,
+                  displayName: participant.name || participant.email,
+                  timezone: 'UTC',
+                  connected: participant.connected
+                }} 
+              />
             ))}
           </div>
 
@@ -306,8 +313,25 @@ export default function MeetingRoom() {
                 {suggestions.map((suggestion, index) => (
                   <SuggestionCard
                     key={index}
-                    suggestion={suggestion}
-                    onBook={setSelectedSuggestion}
+                    suggestion={{
+                      startISO: suggestion.startTime,
+                      endISO: suggestion.endTime,
+                      attendeesFree: suggestion.participants.slice(0, suggestion.participants.length - suggestion.conflicts),
+                      attendeesMissing: suggestion.participants.slice(suggestion.participants.length - suggestion.conflicts),
+                      badges: [],
+                      reason: `Good time slot with ${suggestion.participants.length - suggestion.conflicts} participants free`
+                    }}
+                    onBook={(apiSuggestion) => {
+                      // Convert back to local format
+                      const localSuggestion = {
+                        startTime: apiSuggestion.startISO,
+                        endTime: apiSuggestion.endISO,
+                        score: 0.8, // Default score since API doesn't have it
+                        conflicts: apiSuggestion.attendeesMissing.length,
+                        participants: suggestion.participants
+                      };
+                      setSelectedSuggestion(localSuggestion);
+                    }}
                   />
                 ))}
               </div>
@@ -342,7 +366,14 @@ export default function MeetingRoom() {
       {/* Booking Modal */}
       {selectedSuggestion && (
         <BookingModal
-          suggestion={selectedSuggestion}
+          suggestion={{
+            startISO: selectedSuggestion.startTime,
+            endISO: selectedSuggestion.endTime,
+            attendeesFree: selectedSuggestion.participants.slice(0, selectedSuggestion.participants.length - selectedSuggestion.conflicts),
+            attendeesMissing: selectedSuggestion.participants.slice(selectedSuggestion.participants.length - selectedSuggestion.conflicts),
+            badges: [],
+            reason: `Good time slot with ${selectedSuggestion.participants.length - selectedSuggestion.conflicts} participants free`
+          }}
           attendees={connectedParticipants.map(p => p.email)}
           onClose={() => setSelectedSuggestion(null)}
           onConfirm={handleBook}
@@ -353,10 +384,13 @@ export default function MeetingRoom() {
       <AdvancedDrawer
         isOpen={showAdvanced}
         onClose={() => setShowAdvanced(false)}
-        participants={connectedParticipants}
+        participants={connectedParticipants.map(p => ({
+          email: p.email,
+          displayName: p.name || p.email
+        }))}
         onSettingsChange={(settings) => {
-          setAllowAbsences(settings.allowAbsences);
-          // TODO: Apply other settings
+          // TODO: Apply settings
+          console.log('Settings changed:', settings);
         }}
       />
     </div>

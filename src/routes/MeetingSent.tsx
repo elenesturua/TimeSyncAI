@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { CheckCircle, Users, Calendar, MapPin, Copy, Eye, Save } from 'lucide-react';
+import { CheckCircle, Calendar, Eye, Save } from 'lucide-react';
 import CopyButton from '@/components/CopyButton';
 import Loader from '@/components/Loader';
 

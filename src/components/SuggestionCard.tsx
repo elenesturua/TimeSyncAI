@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Users, Clock, Info } from 'lucide-react';
+import { Calendar, Users, Info } from 'lucide-react';
 import { formatTimeSlot, parseISOTimeSlot, formatBadge } from '@/lib/time';
 import type { Suggestion } from '@/lib/api';
 

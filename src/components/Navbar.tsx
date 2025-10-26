@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Calendar, User, LogOut, LogIn } from 'lucide-react';
-import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
+import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '@/authConfig';
 
 export default function Navbar() {

@@ -33,7 +33,7 @@ export default function CalendarDebug() {
       console.log('✅ Token acquired:', response.accessToken ? 'Yes' : 'No');
       
       // Create Graph client
-      const graphClient = createGraphClient(instance);
+      const graphClient = createGraphClient(instance as any);
       console.log('✅ Graph client created');
       
       // Get user profile
@@ -140,7 +140,7 @@ export default function CalendarDebug() {
                   <h4 className="font-semibold text-green-900">Calendar Events ({calendarEvents.length}):</h4>
                   {calendarEvents.length > 0 ? (
                     <div className="text-sm text-green-700 ml-4 space-y-1 max-h-40 overflow-y-auto">
-                      {calendarEvents.map((event, index) => (
+                      {calendarEvents.map((event) => (
                         <div key={event.id} className="p-2 bg-green-100 rounded">
                           <p className="font-medium">{event.subject}</p>
                           <p className="text-xs">

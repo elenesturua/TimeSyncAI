@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, CheckCircle, XCircle, Clock, Users } from 'lucide-react';
+import { Calendar, CheckCircle, XCircle, Users } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import { InvitationService } from '@/services/invitationService';
 import { CalendarService } from '@/services/calendarService';

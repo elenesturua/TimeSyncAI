@@ -90,7 +90,7 @@ export default function PrioritySettings({
               Set Participant Priorities
             </h3>
             
-            {participants.map((participant, index) => (
+            {participants.map((participant) => (
               <div key={participant.email} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">

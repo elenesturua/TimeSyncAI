@@ -5,7 +5,7 @@ import { useMsal } from '@azure/msal-react';
 import Loader from '@/components/Loader';
 import SuggestionCard from '@/components/SuggestionCard';
 import CopyButton from '@/components/CopyButton';
-import { type Group, emailApi } from '@/lib/api';
+import { type Group } from '@/lib/api';
 import { createGraphClient, getUserProfile, getCalendarEvents, findAvailableSlots, type CalendarEvent } from '@/lib/graphApi';
 import { InvitationService } from '@/services/invitationService';
 import { CalendarService } from '@/services/calendarService';
@@ -199,7 +199,7 @@ export default function PlanMeeting() {
     setIsCreatingMeeting(true);
     try {
       const invitationPromises = participants.map(participant => 
-        InvitationService.createInvitation(
+        InvitationService.createGroupInvitation(
           meetingId,
           currentUser.id,
           participant.email
@@ -551,7 +551,7 @@ export default function PlanMeeting() {
       });
 
       // Create Graph client and fetch data
-      const graphClient = createGraphClient(instance);
+      const graphClient = createGraphClient(instance as any);
       
       // Get user profile
       const profile = await getUserProfile(graphClient);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface AdvancedDrawerProps {
   isOpen: boolean;
@@ -8,7 +8,7 @@ interface AdvancedDrawerProps {
   onSettingsChange: (settings: any) => void;
 }
 
-export default function AdvancedDrawer({ isOpen, onClose, participants, onSettingsChange }: AdvancedDrawerProps) {
+export default function AdvancedDrawer({ isOpen, onClose, onSettingsChange }: AdvancedDrawerProps) {
   const [settings, setSettings] = useState({
     allowAbsences: 0,
     fairness: true,

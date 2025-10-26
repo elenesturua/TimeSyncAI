@@ -1,4 +1,4 @@
-import { format, parseISO, addMinutes } from 'date-fns';
+import { parseISO, addMinutes } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 
 export interface TimeSlot {

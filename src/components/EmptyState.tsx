@@ -1,4 +1,4 @@
-import { Calendar, Users, Clock } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 
 interface EmptyStateProps {
   icon?: React.ReactNode;

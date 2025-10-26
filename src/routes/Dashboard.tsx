@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Calendar, Clock, MapPin, Mail, Edit, Trash2, ArrowRight, Star, AlertCircle } from 'lucide-react';
+import { Users, Plus, MapPin, Mail, Edit, Trash2, ArrowRight } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import Loader from '@/components/Loader';
 import PrioritySettings from '@/components/PrioritySettings';
@@ -31,9 +30,7 @@ interface MeetingForm {
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const { accounts } = useMsal();
-  const account = accounts[0];
   const isAuthenticated = accounts.length > 0;
   
   const [groups, setGroups] = useState<Group[]>([]);
@@ -53,7 +50,6 @@ export default function Dashboard() {
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [showPrioritySettings, setShowPrioritySettings] = useState(false);
   const [participantPriorities, setParticipantPriorities] = useState<Participant[]>([]);
-  const [hasConflicts, setHasConflicts] = useState(false);
 
   useEffect(() => {
     loadGroups();

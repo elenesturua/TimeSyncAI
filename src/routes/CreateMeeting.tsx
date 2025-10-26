@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Users, MapPin, Plus, X, Send, Clock, Mail, ArrowLeft } from 'lucide-react';
+import { Calendar, Users, MapPin, Plus, X, Send, Mail, ArrowLeft } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import Loader from '@/components/Loader';
 
