@@ -137,13 +137,18 @@ export class CalendarService {
     status: 'success' | 'error' | 'in_progress',
     errorMessage?: string
   ): Promise<void> {
-    const syncData: Omit<CalendarSync, 'id'> = {
+    // Only include errorMessage if it's defined
+    const syncData: any = {
       userId,
       lastSyncTime: new Date().toISOString(),
       eventsCount,
       syncStatus: status,
-      errorMessage,
     };
+    
+    // Only add errorMessage if it exists and status is 'error'
+    if (status === 'error' && errorMessage) {
+      syncData.errorMessage = errorMessage;
+    }
     
     // Check if sync record exists
     const syncQuery = query(
