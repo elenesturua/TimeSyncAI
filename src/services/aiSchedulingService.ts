@@ -112,12 +112,23 @@ export class AISchedulingService {
           console.log(`Found ${events.length} Firestore events for ${participant.email}`);
 
           // Convert to busy windows (exclude 'free' events)
+          // Note: event.start and event.end are objects with dateTime and timeZone
           const busy = events
             .filter(event => event.showAs !== 'free')
-            .map(event => ({
-              startISO: event.start.dateTime,
-              endISO: event.end.dateTime
-            }));
+            .map(event => {
+              // Ensure we're using the dateTime string
+              const startDateTime = typeof event.start === 'string' 
+                ? event.start 
+                : event.start.dateTime;
+              const endDateTime = typeof event.end === 'string'
+                ? event.end
+                : event.end.dateTime;
+                
+              return {
+                startISO: startDateTime,
+                endISO: endDateTime
+              };
+            });
 
           console.log(`Extracted ${busy.length} busy periods for ${participant.email}`);
 

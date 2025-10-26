@@ -83,7 +83,20 @@ export const getCalendarEvents = async (
       })
       .get();
 
-    return events.value || [];
+    // Ensure timezone information is preserved
+    const eventsWithTimezone = (events.value || []).map((event: any) => ({
+      ...event,
+      start: {
+        dateTime: event.start.dateTime,
+        timeZone: event.start.timeZone || 'America/Chicago' // Default to CST (UTC-6)
+      },
+      end: {
+        dateTime: event.end.dateTime,
+        timeZone: event.end.timeZone || 'America/Chicago'
+      }
+    }));
+
+    return eventsWithTimezone;
   } catch (error) {
     console.error('Error fetching calendar events:', error);
     throw error;
