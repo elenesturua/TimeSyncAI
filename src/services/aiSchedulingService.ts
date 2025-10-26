@@ -116,17 +116,25 @@ export class AISchedulingService {
           const busy = events
             .filter(event => event.showAs !== 'free')
             .map(event => {
-              // Ensure we're using the dateTime string
+              // Get the datetime strings
               const startDateTime = typeof event.start === 'string' 
                 ? event.start 
                 : event.start.dateTime;
               const endDateTime = typeof event.end === 'string'
                 ? event.end
                 : event.end.dateTime;
-                
+              
+              // Since these are already in UTC-6, we need to convert them back to UTC
+              // for proper Date parsing. UTC-6 means we need to ADD 6 hours to get back to UTC
+              const convertToUTC = (utcMinus6DateTime: string): string => {
+                const date = new Date(utcMinus6DateTime);
+                date.setHours(date.getHours() + 6);
+                return date.toISOString();
+              };
+              
               return {
-                startISO: startDateTime,
-                endISO: endDateTime
+                startISO: convertToUTC(startDateTime),
+                endISO: convertToUTC(endDateTime)
               };
             });
 
