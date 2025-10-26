@@ -534,7 +534,6 @@ export class Schedule {
       // Iterate through each day in the date range
       // Use local dates to avoid timezone issues
       const startDate = startDateObj.toISOString().split('T')[0]; // Get YYYY-MM-DD
-      const endDate = endDateObj.toISOString().split('T')[0];
       
       // Parse dates in local timezone
       const currentDateObj = new Date(startDate + 'T00:00:00'); // Local midnight
