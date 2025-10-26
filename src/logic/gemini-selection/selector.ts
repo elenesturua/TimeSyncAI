@@ -64,13 +64,13 @@ type ResponseBody = {
   error?: string;
 };
 
-type ChatMessage = {
+export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
 };
 
-type ChatRequest = {
+export type ChatRequest = {
   message: string;
   conversationHistory: ChatMessage[];
   currentSuggestions: SuggestedSlot[];
@@ -80,7 +80,7 @@ type ChatRequest = {
   contextNotes?: string;
 };
 
-type ChatResponse = {
+export type ChatResponse = {
   success: boolean;
   message: string;
   newSuggestions?: SuggestedSlot[];
