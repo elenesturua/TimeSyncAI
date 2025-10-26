@@ -244,16 +244,14 @@ export class AISchedulingService {
   ): Suggestion[] {
     return scoredSlots.slice(0, 10).map((slot: any) => {
       // Format dates as ISO strings in Chicago time (America/Chicago timezone)
-      // This ensures all times are consistently in the same timezone
+      // Just extract hours/minutes directly from the date since it's already in local time
       const formatChicagoISO = (date: Date): string => {
-        // Convert to Chicago time zone
-        const chicagoDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-        const year = chicagoDate.getFullYear();
-        const month = String(chicagoDate.getMonth() + 1).padStart(2, '0');
-        const day = String(chicagoDate.getDate()).padStart(2, '0');
-        const hours = String(chicagoDate.getHours()).padStart(2, '0');
-        const minutes = String(chicagoDate.getMinutes()).padStart(2, '0');
-        const seconds = String(chicagoDate.getSeconds()).padStart(2, '0');
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
         return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
       };
       
