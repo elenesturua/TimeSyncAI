@@ -134,8 +134,12 @@ export class AISchedulingService {
             }
           };
         } else {
-          // Participant not in Firestore - return empty schedule (they haven't connected calendar)
-          console.log(`Participant ${participant.email} not found in Firestore - using available schedule`);
+          // Participant not in Firestore - they haven't connected calendar yet
+          // For now, return them as fully available during working hours
+          // In the future, they would need to connect their calendar to share availability
+          console.log(`Participant ${participant.email} not in Firestore - treating as available during working hours`);
+          console.log(`💡 Tip: Participant ${participant.email} needs to connect their calendar to share actual availability`);
+          
           return {
             id: participant.email,
             name: participant.name,
@@ -173,6 +177,8 @@ export class AISchedulingService {
     
     if (totalBusy === 0) {
       console.log('No participant calendars found - generating suggestions based on working hours only');
+    } else {
+      console.log(`Using ${totalBusy} busy periods from ${result.filter(p => p.busy.length > 0).length} connected participants`);
     }
     
     return result;
