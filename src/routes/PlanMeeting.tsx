@@ -10,7 +10,7 @@ import { createGraphClient, getUserProfile, getCalendarEvents, type CalendarEven
 import { InvitationService } from '@/services/invitationService';
 import { CalendarService } from '@/services/calendarService';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, getDocs, getDoc, query, where } from 'firebase/firestore';
 import { Meeting, User as FirestoreUser } from '@/types/firestore';
 
 interface Participant {
