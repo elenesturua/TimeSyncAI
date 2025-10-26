@@ -127,17 +127,14 @@ export class AISchedulingService {
                 ? event.end
                 : event.end.dateTime;
               
-              // Since these are already in UTC-5, we need to convert them back to UTC
-              // for proper Date parsing. UTC-5 means we need to ADD 5 hours to get back to UTC
-              const convertToUTC = (utcMinus5DateTime: string): string => {
-                const date = new Date(utcMinus5DateTime);
-                date.setHours(date.getHours() + 5);
-                return date.toISOString();
-              };
+              // Events are stored in Firestore with timezone info
+              // Parse them and format as ISO strings for the scheduler
+              const startDate = new Date(startDateTime);
+              const endDate = new Date(endDateTime);
               
               return {
-                startISO: convertToUTC(startDateTime),
-                endISO: convertToUTC(endDateTime)
+                startISO: startDate.toISOString(),
+                endISO: endDate.toISOString()
               };
             });
 
@@ -149,10 +146,10 @@ export class AISchedulingService {
             priority: participant.importance || 'Mid',
             busy,
             workingTime: {
-              startHour: 9, // Default - could be from user preferences
+              startHour: 9,
               endHour: 17,
               workingDays: [1, 2, 3, 4, 5], // Mon-Fri
-              timezone: 'UTC'
+              timezone: 'America/Chicago'
             }
           };
         } else {
