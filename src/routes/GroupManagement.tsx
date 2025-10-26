@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Calendar, X } from 'lucide-react';
+import { Users, Plus, Calendar, X, CheckCircle, XCircle } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, getDocs, query, where, deleteDoc, getDoc } from 'firebase/firestore';
@@ -23,6 +23,7 @@ export default function GroupManagement() {
   
   const [currentUser, setCurrentUser] = useState<FirestoreUser | null>(null);
   const [groups, setGroups] = useState<ParticipantGroup[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   
@@ -127,6 +128,31 @@ export default function GroupManagement() {
         where('status', '==', 'pending')
       );
       const invitationsSnapshot = await getDocs(invitationsQuery);
+      
+      // Load invitations with group and admin info
+      const invitationsData = await Promise.all(
+        invitationsSnapshot.docs.map(async (invDoc) => {
+          const invData = invDoc.data();
+          // Get group info
+          const groupDoc = await getDoc(doc(db, 'participantGroups', invData.meetingId));
+          const groupData = groupDoc.data();
+          
+          // Get admin info
+          const adminDoc = await getDoc(doc(db, 'users', invData.inviterId));
+          const adminData = adminDoc.data();
+          
+          return {
+            invitationId: invDoc.id,
+            groupId: invData.meetingId,
+            groupName: groupData?.name || 'Unknown Group',
+            adminEmail: adminData?.email || 'Unknown',
+            status: invData.status,
+          };
+        })
+      );
+      
+      console.log('Invitations data:', invitationsData);
+      setPendingInvitations(invitationsData);
       
       // Load admin info for groups
       const groupsData = await Promise.all(
@@ -257,6 +283,35 @@ export default function GroupManagement() {
 
   const createMeetingFromGroup = (groupId: string) => {
     navigate(`/create-meeting?groupId=${groupId}`);
+  };
+
+  const acceptInvitation = async (invitationId: string) => {
+    if (!currentUser) return;
+    
+    try {
+      await InvitationService.acceptInvitation(invitationId, currentUser.id);
+      console.log('✅ Invitation accepted');
+      // Reload groups and invitations
+      await loadGroups();
+    } catch (error) {
+      console.error('Error accepting invitation:', error);
+      alert('Failed to accept invitation');
+    }
+  };
+
+  const declineInvitation = async (invitationId: string) => {
+    try {
+      const invitationRef = doc(db, 'invitations', invitationId);
+      await updateDoc(invitationRef, {
+        status: 'declined',
+      });
+      console.log('✅ Invitation declined');
+      // Reload groups and invitations
+      await loadGroups();
+    } catch (error) {
+      console.error('Error declining invitation:', error);
+      alert('Failed to decline invitation');
+    }
   };
 
   const deleteGroup = async (groupId: string) => {
@@ -452,8 +507,48 @@ export default function GroupManagement() {
           </div>
         )}
 
+        {/* Pending Invitations */}
+        {pendingInvitations.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Pending Invitations</h2>
+            <div className="space-y-4">
+              {pendingInvitations.map((invitation) => (
+                <div key={invitation.invitationId} className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                        {invitation.groupName}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Admin: {invitation.adminEmail}
+                      </p>
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => acceptInvitation(invitation.invitationId)}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 flex items-center space-x-2 font-medium"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        <span>Accept</span>
+                      </button>
+                      <button
+                        onClick={() => declineInvitation(invitation.invitationId)}
+                        className="px-4 py-2 bg-transparent text-gray-500 border border-gray-300 rounded-lg hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all duration-200 flex items-center space-x-2 font-medium"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        <span>Decline</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Groups List */}
         <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">My Groups</h2>
           {groups.length === 0 ? (
             <div className="text-center py-12">
               <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
