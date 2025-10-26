@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Calendar, X } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, getDocs, query, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { ParticipantGroup, User as FirestoreUser } from '@/types/firestore';
 import { InvitationService } from '@/services/invitationService';
 
@@ -111,6 +111,7 @@ export default function GroupManagement() {
     try {
       console.log('Loading groups for user:', currentUser.id);
       
+      // Get groups where user is owner
       const groupsQuery = query(
         collection(db, 'participantGroups'),
         where('ownerId', '==', currentUser.id)
@@ -119,14 +120,32 @@ export default function GroupManagement() {
       const groupsSnapshot = await getDocs(groupsQuery);
       console.log('Groups snapshot:', groupsSnapshot.docs.length);
       
-      const groupsData = groupsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as ParticipantGroup[];
+      // Get pending invitations for this user
+      const invitationsQuery = query(
+        collection(db, 'invitations'),
+        where('inviteeEmail', '==', account.username),
+        where('status', '==', 'pending')
+      );
+      const invitationsSnapshot = await getDocs(invitationsQuery);
+      
+      // Load admin info for groups
+      const groupsData = await Promise.all(
+        groupsSnapshot.docs.map(async (docSnapshot) => {
+          const groupData = docSnapshot.data();
+          // Get owner info
+          const ownerDoc = await getDoc(doc(db, 'users', groupData.ownerId));
+          const ownerData = ownerDoc.data();
+          
+          return {
+            id: docSnapshot.id,
+            ...groupData,
+            ownerEmail: ownerData?.email || 'Unknown',
+          } as ParticipantGroup & { ownerEmail: string };
+        })
+      );
       
       console.log('Groups data:', groupsData);
       
-      // For now, just set groups without loading participants to avoid complex queries
       setGroups(groupsData);
       
     } catch (error) {
@@ -455,6 +474,9 @@ export default function GroupManagement() {
                     <h3 className="text-xl font-semibold text-gray-900">{group.name}</h3>
                     <p className="text-gray-600">
                       {group.participants.length} participants • Created {new Date(group.createdAt).toLocaleDateString()}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Admin: {(group as any).ownerEmail || 'Unknown'}
                     </p>
                   </div>
                   
