@@ -6,7 +6,7 @@ import Loader from '@/components/Loader';
 import SuggestionCard from '@/components/SuggestionCard';
 import CopyButton from '@/components/CopyButton';
 import { type Group } from '@/lib/api';
-import { createGraphClient, getUserProfile, getCalendarEvents, findAvailableSlots, type CalendarEvent } from '@/lib/graphApi';
+import { createGraphClient, getUserProfile, getCalendarEvents, type CalendarEvent } from '@/lib/graphApi';
 import { InvitationService } from '@/services/invitationService';
 import { CalendarService } from '@/services/calendarService';
 import { db } from '@/lib/firebase';
@@ -47,13 +47,13 @@ export default function PlanMeeting() {
   const [customHours, setCustomHours] = useState({ start: '09:00', end: '17:00' });
   const [allowAbsences, setAllowAbsences] = useState(0);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [_isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   
   // Firebase integration state
   const [currentUser, setCurrentUser] = useState<FirestoreUser | null>(null);
-  const [isCreatingMeeting, setIsCreatingMeeting] = useState(false);
+  const [_isCreatingMeeting, setIsCreatingMeeting] = useState(false);
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
   
@@ -68,7 +68,7 @@ export default function PlanMeeting() {
   
   // Groups state
   const [groups, setGroups] = useState<Group[]>([]);
-  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [_isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [showGroupsDropdown, setShowGroupsDropdown] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
 
@@ -589,51 +589,6 @@ export default function PlanMeeting() {
     }
   };
 
-  const generateSuggestions = async () => {
-    if (!isCalendarConnected || !dateRange.start || !dateRange.end) {
-      console.log('Calendar not connected or date range not set');
-      return;
-    }
-
-    setIsLoadingSuggestions(true);
-    try {
-      const startDate = new Date(dateRange.start);
-      const endDate = new Date(dateRange.end);
-      
-      // Find available slots based on calendar events
-      const availableSlots = findAvailableSlots(
-        calendarEvents,
-        startDate,
-        endDate,
-        duration,
-        customHours
-      );
-
-      // Convert to suggestions format
-      const newSuggestions: Suggestion[] = availableSlots.slice(0, 5).map((slot, index) => ({
-        startISO: slot.toISOString(),
-        endISO: new Date(slot.getTime() + duration * 60000).toISOString(),
-        attendeesFree: participants.map(p => p.email),
-        attendeesMissing: [],
-        badges: ['Available', 'Calendar-based'],
-        reason: `Found ${availableSlots.length} available time slots based on your calendar`
-      }));
-
-      setSuggestions(newSuggestions);
-      console.log('Generated suggestions:', newSuggestions);
-      
-      // Debug: Show available slots
-      console.log('🎯 Available Time Slots Found:');
-      availableSlots.forEach((slot, index) => {
-        console.log(`${index + 1}. ${slot.toLocaleString()} (${duration} minutes)`);
-      });
-      
-    } catch (error) {
-      console.error('Failed to generate suggestions:', error);
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  };
 
 
   return (
@@ -1068,7 +1023,7 @@ export default function PlanMeeting() {
                       type="checkbox"
                       id="custom-hours"
                       checked={preferredHours.includes('custom')}
-                      onChange={(e) => toggleHourRange('custom')}
+                      onChange={(_e) => toggleHourRange('custom')}
                       className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
                     <label htmlFor="custom-hours" className="text-sm font-medium text-gray-700">
@@ -1199,7 +1154,7 @@ export default function PlanMeeting() {
                           View calendar events (click to expand)
                         </summary>
                         <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
-                          {calendarEvents.slice(0, 5).map((event, index) => (
+                          {calendarEvents.slice(0, 5).map((event, _index) => (
                             <div key={event.id} className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
                               <div className="font-medium">{event.subject}</div>
                               <div className="text-blue-600">

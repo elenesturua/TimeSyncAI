@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { CheckCircle, Copy, ExternalLink, Users, Calendar, Video, Save, Plus, Edit } from 'lucide-react';
-import { linkApi, withBearer } from '@/lib/api';
+import { CheckCircle, Users, Calendar, Save, Plus } from 'lucide-react';
+import { withBearer } from '@/lib/api';
 import { useMsal } from '@azure/msal-react';
 import CopyButton from '@/components/CopyButton';
-import { formatTimeSlot, parseISOTimeSlot } from '@/lib/time';
 import Loader from '@/components/Loader';
 
 export default function Success() {
-  const { id } = useParams<{ id: string }>();
+  const { id: _id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { instance } = useMsal();
@@ -101,7 +100,7 @@ export default function Success() {
               <div>
                 <p className="text-sm text-gray-600">Date & Time</p>
                 <p className="font-medium text-gray-900">
-                  {formatTimeSlot(parseISOTimeSlot(booking.startTime))}
+                  {booking.startTime ? new Date(booking.startTime).toLocaleString() : 'TBD'}
                 </p>
               </div>
               

@@ -6,14 +6,12 @@ import {
   query, 
   where, 
   getDocs,
-  getDoc,
   deleteDoc,
   orderBy,
-  limit,
-  serverTimestamp 
+  limit
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { CalendarEvent, User, CalendarSync } from '../types/firestore';
+import { CalendarEvent, CalendarSync } from '../types/firestore';
 import { getCalendarEvents, createGraphClient } from '../lib/graphApi';
 
 export class CalendarService {
@@ -116,7 +114,7 @@ export class CalendarService {
       
     } catch (error) {
       console.error('Error syncing calendar:', error);
-      await this.updateSyncRecord(userId, 0, 'error', error.message);
+      await this.updateSyncRecord(userId, 0, 'error', (error as Error).message);
     }
   }
 

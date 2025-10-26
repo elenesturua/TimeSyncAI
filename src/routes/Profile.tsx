@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { User, Clock, Globe, Phone, LogOut, RefreshCw } from 'lucide-react';
+import { User, Clock, Globe, LogOut, RefreshCw } from 'lucide-react';
 import { useMsal, AuthenticatedTemplate, UnauthenticatedTemplate } from '@azure/msal-react';
 import HoursChips from '@/components/HoursChips';
 import Loader from '@/components/Loader';
 
 export default function Profile() {
-  const navigate = useNavigate();
   const { instance, accounts } = useMsal();
   
   const account = accounts[0];
