@@ -55,6 +55,7 @@ export default function PlanMeeting() {
   const [_isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
+  const [participantPriorities, setParticipantPriorities] = useState<{ [email: string]: 'High' | 'Mid' | 'Low' }>({});
   
   // Firebase integration state
   const [currentUser, setCurrentUser] = useState<FirestoreUser | null>(null);
@@ -465,14 +466,26 @@ export default function PlanMeeting() {
         if (!newMeetingId) return;
       }
       
+      // Create list of all participants including current user
+      const allParticipants = [
+        // Current user (organizer)
+        ...(currentUser && account ? [{
+          email: account.username,
+          name: account.name,
+          importance: participantPriorities[account.username] || 'High' as const
+        }] : []),
+        // Other participants
+        ...participants.map(p => ({
+          email: p.email,
+          name: p.name,
+          importance: participantPriorities[p.email] || 'Low' as const
+        }))
+      ];
+
       // Generate AI-powered suggestions
       const result = await AISchedulingService.generateAISuggestions(
         {
-          participants: participants.map(p => ({
-            email: p.email,
-            name: p.name,
-            importance: 'Mid' as const // Default - can be made configurable
-          })),
+          participants: allParticipants,
           startDate: dateRange.start,
           endDate: dateRange.end,
           durationMinutes: duration,
@@ -1150,6 +1163,87 @@ export default function PlanMeeting() {
                 Advanced options
               </summary>
               <div className="mt-4 space-y-4">
+                {/* Participant Priorities */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Set participant priorities
+                  </label>
+                  <div className="space-y-2">
+                    {/* Current user (admin) */}
+                    {currentUser && (
+                      <div className="flex items-center justify-between p-3 bg-primary-50 border border-primary-200 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className="h-8 w-8 bg-primary-500 rounded-full flex items-center justify-center">
+                            <span className="text-white font-medium text-sm">
+                              {account?.name?.charAt(0).toUpperCase() || 'A'}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{account?.name || account?.username}</p>
+                            <p className="text-xs text-gray-600">Organizer (you)</p>
+                          </div>
+                        </div>
+                        <div className="flex space-x-1">
+                          {(['Low', 'Mid', 'High'] as const).map((priority) => (
+                            <button
+                              key={priority}
+                              onClick={() => {
+                                const email = account?.username || '';
+                                setParticipantPriorities(prev => ({ ...prev, [email]: priority }));
+                              }}
+                              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                participantPriorities[account?.username || ''] === priority
+                                  ? 'bg-primary-600 text-white'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {priority}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Other participants */}
+                    {participants.map((participant, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className="h-8 w-8 bg-gray-400 rounded-full flex items-center justify-center">
+                            <span className="text-white font-medium text-sm">
+                              {participant.email.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{participant.name || participant.email}</p>
+                            <p className="text-xs text-gray-600">{participant.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex space-x-1">
+                          {(['Low', 'Mid', 'High'] as const).map((priority) => (
+                            <button
+                              key={priority}
+                              onClick={() => {
+                                setParticipantPriorities(prev => ({ ...prev, [participant.email]: priority }));
+                              }}
+                              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                participantPriorities[participant.email] === priority
+                                  ? 'bg-primary-600 text-white'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {priority}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {participants.length === 0 && !currentUser && (
+                      <p className="text-xs text-gray-500 italic">Add participants to set their priorities</p>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Allow absences
