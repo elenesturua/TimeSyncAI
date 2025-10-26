@@ -59,6 +59,7 @@ export class AISchedulingService {
 
   /**
    * Fetch calendar events for all participants (only free/busy times)
+   * For each participant, fetch their calendar from Microsoft Graph
    */
   private static async fetchParticipantCalendars(
     participants: PlanMeetingRequest['participants'],
@@ -87,6 +88,8 @@ export class AISchedulingService {
             startISO: event.start.dateTime,
             endISO: event.end.dateTime
           }));
+
+        console.log(`Fetched ${busy.length} busy periods for ${participant.email}`);
 
         return {
           id: participant.email,

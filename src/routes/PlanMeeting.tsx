@@ -462,7 +462,7 @@ export default function PlanMeeting() {
         if (!newMeetingId) return;
       }
       
-      // Generate AI-powered suggestions
+      // Generate AI-powered suggestions using scheduler.ts then selector.ts
       const aiSuggestions = await AISchedulingService.generateAISuggestions(
         {
           participants: participants.map(p => ({
@@ -481,54 +481,21 @@ export default function PlanMeeting() {
         instance as any
       );
       
+      // Always use real AI suggestions based on participant calendars
+      // No mock data fallback
       if (aiSuggestions.length > 0) {
         setSuggestions(aiSuggestions);
       } else {
-        // Fallback to mock suggestions if AI returns nothing
-        await generateMockSuggestions();
+        console.warn('No suggestions generated from AI scheduler');
+        setSuggestions([]);
       }
       
     } catch (error) {
       console.error('Error getting AI suggestions:', error);
-      // Fallback to mock suggestions on error
-      await generateMockSuggestions();
+      setSuggestions([]);
     } finally {
       setIsLoadingSuggestions(false);
     }
-  };
-
-  const generateMockSuggestions = async () => {
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Mock suggestions
-    const mockSuggestions: Suggestion[] = [
-      {
-        startISO: '2024-01-15T10:00:00Z',
-        endISO: '2024-01-15T11:00:00Z',
-        attendeesFree: participants.map(p => p.email),
-        attendeesMissing: [],
-        badges: ['Perfect match', 'All available'],
-        reason: 'All participants are free during this time slot'
-      },
-      {
-        startISO: '2024-01-15T14:00:00Z',
-        endISO: '2024-01-15T15:00:00Z',
-        attendeesFree: participants.slice(0, -1).map(p => p.email),
-        attendeesMissing: participants.slice(-1).map(p => p.email),
-        badges: ['Good match', '1 conflict'],
-        reason: 'One participant has a minor conflict but can reschedule'
-      },
-      {
-        startISO: '2024-01-16T09:00:00Z',
-        endISO: '2024-01-16T10:00:00Z',
-        attendeesFree: participants.map(p => p.email),
-        attendeesMissing: [],
-        badges: ['Available', 'Next day'],
-        reason: 'All participants available, scheduled for next day'
-      }
-    ];
-
-    setSuggestions(mockSuggestions);
   };
 
   const handleBook = async (booking: any) => {
