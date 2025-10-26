@@ -78,7 +78,7 @@ export class AISchedulingService {
 
   /**
    * Fetch calendar events for all participants (only free/busy times)
-   * Uses Firestore-stored calendar data from CalendarService
+   * For now, generates suggestions without calendar data (future: participants will share availability)
    */
   private static async fetchParticipantCalendars(
     participants: PlanMeetingRequest['participants'],
@@ -91,7 +91,7 @@ export class AISchedulingService {
     // Fetch calendars in parallel for efficiency
     const calendarPromises = participants.map(async (participant) => {
       try {
-        // First, try to get user ID from Firestore
+        // Try to get user ID from Firestore
         const userQuery = query(
           collection(db, 'users'),
           where('email', '==', participant.email)
@@ -134,12 +134,13 @@ export class AISchedulingService {
             }
           };
         } else {
-          console.warn(`No Firestore user found for ${participant.email}, returning empty schedule`);
+          // Participant not in Firestore - return empty schedule (they haven't connected calendar)
+          console.log(`Participant ${participant.email} not found in Firestore - using available schedule`);
           return {
             id: participant.email,
             name: participant.name,
             priority: participant.importance || 'Mid',
-            busy: [],
+            busy: [], // Empty = fully available during working hours
             workingTime: {
               startHour: 9,
               endHour: 17,
@@ -150,7 +151,7 @@ export class AISchedulingService {
         }
       } catch (error) {
         console.error(`Error fetching calendar for ${participant.email}:`, error);
-        // Return empty busy schedule if fetch fails
+        // Return empty busy schedule if fetch fails (treat as available)
         return {
           id: participant.email,
           name: participant.name,
@@ -167,7 +168,13 @@ export class AISchedulingService {
     });
 
     const result = await Promise.all(calendarPromises);
-    console.log(`Fetched calendars for all participants. Total busy periods: ${result.reduce((sum, p) => sum + p.busy.length, 0)}`);
+    const totalBusy = result.reduce((sum, p) => sum + p.busy.length, 0);
+    console.log(`Fetched calendars for all participants. Total busy periods: ${totalBusy}`);
+    
+    if (totalBusy === 0) {
+      console.log('No participant calendars found - generating suggestions based on working hours only');
+    }
+    
     return result;
   }
 
