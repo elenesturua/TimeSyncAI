@@ -23,25 +23,25 @@ describe('Schedule', () => {
 
     // Create test users
     mockUsers = [
-      new User('manager@example.com', 'Manager', {
+      new User('manager@example.com', 'Manager', 'High', {
         startHour: 9,
         endHour: 17,
         timezone: 'UTC',
         workingDays: [1, 2, 3, 4, 5]
       }),
-      new User('lead@example.com', 'Lead Developer', {
+      new User('lead@example.com', 'Lead Developer', 'High', {
         startHour: 9,
         endHour: 17,
         timezone: 'UTC',
         workingDays: [1, 2, 3, 4, 5]
       }),
-      new User('dev1@example.com', 'Developer 1', {
+      new User('dev1@example.com', 'Developer 1', 'Mid', {
         startHour: 10,
         endHour: 18,
         timezone: 'UTC',
         workingDays: [1, 2, 3, 4, 5]
       }),
-      new User('dev2@example.com', 'Developer 2', {
+      new User('dev2@example.com', 'Developer 2', 'Mid', {
         startHour: 10,
         endHour: 18,
         timezone: 'UTC',
@@ -50,26 +50,26 @@ describe('Schedule', () => {
     ];
 
     // Add users to schedule
-    schedule.addUser(mockUsers[0], 'High'); // Manager
-    schedule.addUser(mockUsers[1], 'High'); // Lead
-    schedule.addUser(mockUsers[2], 'Mid');   // Dev1
-    schedule.addUser(mockUsers[3], 'Mid');  // Dev2
+    schedule.addUser(mockUsers[0]); // Manager
+    schedule.addUser(mockUsers[1]); // Lead
+    schedule.addUser(mockUsers[2]); // Dev1
+    schedule.addUser(mockUsers[3]); // Dev2
 
     // Add Low priority users
     const lowPriorityUsers = [
-      new User('intern1@example.com', 'Intern 1', {
+      new User('intern1@example.com', 'Intern 1', 'Low', {
         startHour: 9,
         endHour: 17,
         timezone: 'UTC',
         workingDays: [1, 2, 3, 4, 5]
       }),
-      new User('intern2@example.com', 'Intern 2', {
+      new User('intern2@example.com', 'Intern 2', 'Low', {
         startHour: 9,
         endHour: 17,
         timezone: 'UTC',
         workingDays: [1, 2, 3, 4, 5]
       }),
-      new User('contractor@example.com', 'Contractor', {
+      new User('contractor@example.com', 'Contractor', 'Low', {
         startHour: 10,
         endHour: 16,
         timezone: 'UTC',
@@ -78,27 +78,27 @@ describe('Schedule', () => {
     ];
 
     // Add Low priority users to schedule
-    schedule.addUser(lowPriorityUsers[0], 'Low');
-    schedule.addUser(lowPriorityUsers[1], 'Low');
-    schedule.addUser(lowPriorityUsers[2], 'Low');
+    schedule.addUser(lowPriorityUsers[0]);
+    schedule.addUser(lowPriorityUsers[1]);
+    schedule.addUser(lowPriorityUsers[2]);
 
     // Add new Mid priority user with split working hours
-    const newMidUser = new User('mid3@example.com', 'Mid 3', {
+    const newMidUser = new User('mid3@example.com', 'Mid 3', 'Mid', {
       startHour: 9,
       endHour: 14,
       timezone: 'UTC',
       workingDays: [1, 2, 3, 4, 5]
     });
-    schedule.addUser(newMidUser, 'Mid');
+    schedule.addUser(newMidUser);
 
     // Add Intern 3 with limited availability (11-12 only)
-    const intern3 = new User('intern3@example.com', 'Intern 3', {
+    const intern3 = new User('intern3@example.com', 'Intern 3', 'Low', {
       startHour: 11,
       endHour: 14,
       timezone: 'UTC',
       workingDays: [1, 2, 3, 4, 5]
     });
-    schedule.addUser(intern3, 'Low');
+    schedule.addUser(intern3);
 
     // Mock GetCalendarEvents to return busy events for all users
     vi.mocked(GetCalendarEvents).mockImplementation(async (userID: string) => {
@@ -340,7 +340,7 @@ describe('Schedule', () => {
     });
 
     it('should add user to Low priority by default', () => {
-      const newUser = new User('intern@example.com', 'Intern');
+      const newUser = new User('intern@example.com', 'Intern', 'Low');
       schedule.addUser(newUser);
       
       expect(schedule.Low).toContain(newUser);
@@ -611,6 +611,20 @@ describe('Schedule', () => {
         
         console.log(`${index + 1}. ${startTime} - ${endTime}`);
         console.log(`   Score: ${slot.score.toFixed(3)}, ${highCount}-${midCount}-${lowCount} (High-Mid-Low), ${(slot.overallAttendance * 100).toFixed(1)}%`);
+        
+        // Group available participants by priority using importance property
+        const availableHigh = slot.participants.available.filter(user => user.importance === 'High');
+        const availableMid = slot.participants.available.filter(user => user.importance === 'Mid');
+        const availableLow = slot.participants.available.filter(user => user.importance === 'Low');
+        
+        console.log(`   Available: High[${availableHigh.map(u => u.name).join(', ')}] Mid[${availableMid.map(u => u.name).join(', ')}] Low[${availableLow.map(u => u.name).join(', ')}]`);
+        
+        // Group unavailable participants by priority using importance property
+        const unavailableHigh = slot.participants.unavailable.filter(user => user.importance === 'High');
+        const unavailableMid = slot.participants.unavailable.filter(user => user.importance === 'Mid');
+        const unavailableLow = slot.participants.unavailable.filter(user => user.importance === 'Low');
+        
+        console.log(`   Unavailable: High[${unavailableHigh.map(u => u.name).join(', ')}] Mid[${unavailableMid.map(u => u.name).join(', ')}] Low[${unavailableLow.map(u => u.name).join(', ')}]`);
         console.log('');
       });
 

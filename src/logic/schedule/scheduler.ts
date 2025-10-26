@@ -9,12 +9,16 @@ interface TimeInterval {
 }
 
 /**
- * Represents a time interval with a preference score
+ * Represents a time interval with a preference score and participant information
  */
 interface ScoredTimeInterval extends TimeInterval {
   score: number;
   midAttendance: number;
   overallAttendance: number;
+  participants: {
+    available: User[];  // User objects who can attend
+    unavailable: User[];  // User objects who cannot attend
+  };
 }
 
 /**
@@ -232,6 +236,7 @@ export class User {
   public userID: string;
   public name: string;
   public busySchedule: BusySchedule;
+  public importance: 'High' | 'Mid' | 'Low';
   public workingTime: {
     startHour: number;
     endHour: number;
@@ -239,7 +244,7 @@ export class User {
     workingDays: number[]; // 0-6 (Sunday-Saturday)
   };
 
-  constructor(userID: string, name: string, workingTime?: {
+  constructor(userID: string, name: string, importance: 'High' | 'Mid' | 'Low', workingTime?: {
     startHour?: number;
     endHour?: number;
     timezone?: string;
@@ -247,6 +252,7 @@ export class User {
   }) {
     this.userID = userID;
     this.name = name;
+    this.importance = importance;
     this.busySchedule = new BusySchedule(userID);
     
     // Set default working time if not provided
@@ -405,12 +411,8 @@ export class Schedule {
    * @param user - The user to add
    * @param priority - Priority level ('High', 'Mid', or 'Low')
    */
-  addUser(user: User, priority?: 'High' | 'Mid' | 'Low'): void {
-    if (priority) {
-      this[priority].push(user);
-    } else {
-      this.Low.push(user);
-    }
+  addUser(user: User): void {
+    this[user.importance].push(user);
   }
 
   /**
@@ -525,13 +527,15 @@ export class Schedule {
         for (const slot of daySlots) {
           const attendance = this.calculateAttendanceRates(slot);
           const score = this.calculatePreferenceScore(attendance);
+          const participants = this.calculateParticipantAvailability(slot);
           
           this.ScoredTimeIntervals.push({
             start: slot.start,
             end: slot.end,
             score: score,
             midAttendance: attendance.mid,
-            overallAttendance: attendance.overall
+            overallAttendance: attendance.overall,
+            participants: participants
           });
         }
       }
@@ -605,6 +609,31 @@ export class Schedule {
   }): number {
     // MID * 0.4 + OverallAttendance * 0.6
     return (attendance.mid * 0.4) + (attendance.overall * 0.6);
+  }
+
+  /**
+   * Calculate which participants are available and unavailable for a time slot
+   * @param slot - Time slot to check
+   * @returns Object with available and unavailable User objects
+   */
+  private calculateParticipantAvailability(slot: TimeInterval): {
+    available: User[];
+    unavailable: User[];
+  } {
+    const available: User[] = [];
+    const unavailable: User[] = [];
+    
+    const allUsers = this.getAllUsers();
+    
+    for (const user of allUsers) {
+      if (user.isTimeSlotAvailable(slot.start, slot.end)) {
+        available.push(user);
+      } else {
+        unavailable.push(user);
+      }
+    }
+    
+    return { available, unavailable };
   }
 
 }
