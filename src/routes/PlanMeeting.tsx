@@ -264,9 +264,9 @@ export default function PlanMeeting() {
     setIsCreatingMeeting(true);
     try {
       // Parse local time ISO strings (format: YYYY-MM-DDTHH:MM:SS)
-      // Add 'Z' to make them UTC, then convert to Date objects
-      const startDate = new Date(suggestion.startISO + 'Z');
-      const endDate = new Date(suggestion.endISO + 'Z');
+      // Convert to local Date objects
+      const startDate = new Date(suggestion.startISO.replace('T', ' '));
+      const endDate = new Date(suggestion.endISO.replace('T', ' '));
       
       console.log('📧 Sending invitations with meeting time:', {
         startISO_original: suggestion.startISO,
@@ -1565,9 +1565,9 @@ export default function PlanMeeting() {
                 <h3 className="font-semibold text-primary-900 mb-2">Selected Meeting Time</h3>
                 <p className="text-primary-700">
                   {(() => {
-                    // Parse local time ISO strings (without Z)
-                    const startDate = new Date(selectedSuggestion.startISO + 'Z');
-                    const endDate = new Date(selectedSuggestion.endISO + 'Z');
+                    // Parse local time ISO strings (format: YYYY-MM-DDTHH:MM:SS)
+                    const startDate = new Date(selectedSuggestion.startISO.replace('T', ' '));
+                    const endDate = new Date(selectedSuggestion.endISO.replace('T', ' '));
                     // When parsing UTC ISO strings, we need to add back the offset
                     // If the time shows as UTC (5 hours ahead), we need to display local time
                     return `${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
