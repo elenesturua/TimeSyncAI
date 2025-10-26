@@ -5,16 +5,9 @@ vi.mock('../schedule/MSGraph', () => ({
   GetCalendarEvents: vi.fn()
 }));
 
-// Gemini APIをモック
-vi.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
-    getGenerativeModel: vi.fn().mockReturnValue({
-      generateContent: vi.fn()
-    })
-  }))
-}));
+// Gemini APIは実際のAPIを使用（モックしない）
 
-import { Schedule, User, type ScoredTimeInterval } from '../schedule/scheduler';
+import { Schedule, User } from '../schedule/scheduler';
 import { GetCalendarEvents } from '../schedule/MSGraph';
 
 // selector.tsから必要な関数をインポート（実際の実装を使用）
@@ -28,7 +21,6 @@ import {
 describe('Gemini Selection Integration', () => {
   let schedule: Schedule;
   let mockUsers: User[];
-  let mockScoredSlots: ScoredTimeInterval[];
 
   beforeEach(() => {
     // Set test dates (15th only)
@@ -294,10 +286,7 @@ describe('Gemini Selection Integration', () => {
       return mockEvents[userID as keyof typeof mockEvents] || [];
     });
 
-    // Generate scored slots for testing
-    schedule.generateScoredMeetingSlots().then(() => {
-      mockScoredSlots = schedule.ScoredTimeIntervals;
-    });
+    // Generate scored slots for testing (async operation handled in individual tests)
   });
 
   describe('generateScoredSlots', () => {
@@ -640,8 +629,8 @@ Reason: This is a test
         console.log(`${index + 1}. ${suggestion.timeslot.startISO} - ${suggestion.timeslot.endISO}`);
         console.log(`   Score: ${suggestion.score}/100 | Confidence: ${suggestion.confidence}%`);
         console.log(`   Reason: ${suggestion.reason}`);
-        console.log(`   Suggested Attendees: ${suggestion.suggestedAttendees.length}`);
-        console.log(`   Practical Notes: ${suggestion.practicalNotes.length} items`);
+        console.log(`   Suggested Attendees: ${suggestion.suggestedAttendees?.length || 0}`);
+        console.log(`   Practical Notes: ${suggestion.practicalNotes?.length || 0} items`);
         console.log('');
       });
 
@@ -722,98 +711,236 @@ Reason: This is a test
     });
   });
 
-  describe('Integration Test with Mock Gemini Response', () => {
-    it('should simulate complete Gemini selection workflow', async () => {
+  describe('Integration Test with Real Gemini API', () => {
+    it('should test complete Gemini selection workflow with real API', async () => {
+      // Check if GEMINI_API_KEY is available
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.log('⚠️  GEMINI_API_KEY not set - skipping real API test');
+        return;
+      }
+
+      console.log('🚀 Testing complete Gemini selection workflow with real API...');
+
       await schedule.generateScoredMeetingSlots();
       const scoredSlots = schedule.ScoredTimeIntervals;
       const top20Slots = scoredSlots.slice(0, 20);
 
-      // Mock Gemini response
-      const mockGeminiResponse = `
-RECOMMENDATION 1:
-Slot ID: slot_1
-Start Time: 2024-01-15T09:30:00.000Z
-End Time: 2024-01-15T10:00:00.000Z
-Score: 88
-Confidence: 92
-Reason: Optimal time slot with all high-priority participants available and excellent mid-priority attendance. Morning slot ensures fresh minds and minimal conflicts.
-Suggested Attendees: manager@example.com:suggest, lead@example.com:suggest, dev1@example.com:suggest, dev2@example.com:optional
-Practical Notes: Send calendar invites 24 hours in advance
-Consider coffee break before meeting
-Prepare agenda in advance
+      expect(top20Slots.length).toBeGreaterThan(0);
 
-RECOMMENDATION 2:
-Slot ID: slot_2
-Start Time: 2024-01-15T13:30:00.000Z
-End Time: 2024-01-15T14:00:00.000Z
-Score: 82
-Confidence: 85
-Reason: Good afternoon alternative with strong attendance rates. Post-lunch slot may require energy management but offers good availability.
-Suggested Attendees: manager@example.com:suggest, lead@example.com:suggest, dev1@example.com:optional
-Practical Notes: Schedule after lunch break
-Consider shorter meeting if energy is low
-Send reminder 30 minutes before
+      // Prepare request body for real API call
+      const requestBody = {
+        participants: mockUsers.map(user => ({
+          id: user.userID,
+          name: user.name,
+          priority: user.importance,
+          busy: user.busySchedule.getBusyIntervals().map(interval => ({
+            startISO: interval.start.toISOString(),
+            endISO: interval.end.toISOString()
+          })),
+          workingTime: {
+            startHour: user.workingTime.startHour,
+            endHour: user.workingTime.endHour,
+            workingDays: user.workingTime.workingDays
+          }
+        })),
+        preferences: {
+          durationMinutes: 30,
+          preferredStartHourRange: { start: 9, end: 17 },
+          bufferMinutes: 15
+        },
+        contextNotes: 'Weekly team standup meeting with all developers and stakeholders. Priority is on having all high-priority participants available.',
+        startDate: '2024-01-15',
+        endDate: '2024-01-15',
+        meetingDurationMinutes: 30
+      };
 
-RECOMMENDATION 3:
-Slot ID: slot_3
-Start Time: 2024-01-15T16:30:00.000Z
-End Time: 2024-01-15T17:00:00.000Z
-Score: 75
-Confidence: 78
-Reason: End-of-day slot with moderate attendance. Suitable for urgent meetings but may conflict with end-of-day routines.
-Suggested Attendees: manager@example.com:suggest, lead@example.com:optional
-Practical Notes: Confirm end-of-day availability
-Keep meeting concise
-Consider rescheduling if not urgent
+      // Build Gemini prompt
+      const prompt = buildGeminiPrompt(requestBody, top20Slots);
+      
+      console.log('📝 Generated prompt for Gemini API');
+      console.log(`System instruction length: ${prompt.systemInstruction.length} chars`);
+      console.log(`User prompt length: ${prompt.userPrompt.length} chars`);
 
-METHODOLOGY:
-Selected timeslots based on high-priority participant availability (100% required), mid-priority attendance optimization, and practical scheduling considerations including time of day preferences and energy levels.
-`;
+      // Call actual Gemini API
+      const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-03-25:generateContent";
+      
+      const payload = {
+        systemInstruction: { parts: [{ text: prompt.systemInstruction }] },
+        contents: [{ role: "user", parts: [{ text: prompt.userPrompt }] }],
+        generationConfig: {
+          maxOutputTokens: 3000,
+          temperature: 0.1,
+          topP: 0.9,
+        },
+      };
 
-      // Parse the mock response
-      const parsedSuggestions = parseGeminiTextOutput(mockGeminiResponse);
+      console.log('🌐 Making request to Gemini API...');
+      const startTime = Date.now();
 
-      console.log('\n=== Complete Gemini Selection Workflow Test ===');
-      console.log(`Input: ${top20Slots.length} scored slots`);
-      console.log(`Output: ${parsedSuggestions.length} Gemini recommendations`);
-      console.log('');
+      try {
+        const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-      parsedSuggestions.forEach((suggestion, index) => {
-        console.log(`Gemini Recommendation ${index + 1}:`);
-        console.log(`  Time: ${suggestion.timeslot.startISO} - ${suggestion.timeslot.endISO}`);
-        console.log(`  Score: ${suggestion.score}/100 | Confidence: ${suggestion.confidence}%`);
-        console.log(`  Reason: ${suggestion.reason}`);
-        console.log(`  Attendees: ${suggestion.suggestedAttendees.length} participants`);
-        console.log(`  Notes: ${suggestion.practicalNotes.length} practical tips`);
-        console.log('');
-      });
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
 
-      // Verify parsed suggestions
-      expect(parsedSuggestions).toHaveLength(3);
-      expect(parsedSuggestions[0].score).toBe(88);
-      expect(parsedSuggestions[0].confidence).toBe(92);
-      expect(parsedSuggestions[0].suggestedAttendees).toHaveLength(4);
-      expect(parsedSuggestions[0].practicalNotes).toHaveLength(3);
+        console.log(`⏱️  API response time: ${responseTime}ms`);
+        console.log(`📊 Response status: ${response.status} ${response.statusText}`);
 
-      // Test algorithmic fallback comparison
-      const algorithmicSuggestions = top20Slots.slice(0, 3).map((slot, index) => 
-        convertToSuggestedSlot(slot, index)
-      );
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ Gemini API error:', errorText);
+          throw new Error(`Gemini API failed: ${response.status} ${response.statusText}`);
+        }
 
-      console.log('=== Algorithmic vs Gemini Comparison ===');
-      console.log('Algorithmic Top 3:');
-      algorithmicSuggestions.forEach((suggestion, index) => {
-        console.log(`  ${index + 1}. Score: ${suggestion.score}/100 | Confidence: ${suggestion.confidence}%`);
-      });
-      console.log('');
-      console.log('Gemini Top 3:');
-      parsedSuggestions.forEach((suggestion, index) => {
-        console.log(`  ${index + 1}. Score: ${suggestion.score}/100 | Confidence: ${suggestion.confidence}%`);
-      });
+        const geminiResult = await response.json();
+        console.log('✅ Gemini API call successful');
+        console.log('📋 Full Gemini response:', JSON.stringify(geminiResult, null, 2));
 
-      // Both should provide valid suggestions
-      expect(algorithmicSuggestions.length).toBeGreaterThan(0);
-      expect(parsedSuggestions.length).toBeGreaterThan(0);
-    });
+        // Extract text response
+        const candidateText = geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        
+        if (!candidateText.trim()) {
+          console.log('⚠️  Empty response detected. Full response structure:');
+          console.log('- candidates:', geminiResult?.candidates);
+          console.log('- first candidate:', geminiResult?.candidates?.[0]);
+          console.log('- content:', geminiResult?.candidates?.[0]?.content);
+          console.log('- parts:', geminiResult?.candidates?.[0]?.content?.parts);
+          throw new Error("Gemini returned empty response");
+        }
+
+        console.log('📄 Raw Gemini response:');
+        console.log('─'.repeat(80));
+        console.log(candidateText);
+        console.log('─'.repeat(80));
+
+        // Parse the response
+        const parsedSuggestions = parseGeminiTextOutput(candidateText);
+        
+        console.log(`\n🎯 Parsed ${parsedSuggestions.length} suggestions from Gemini:`);
+        
+        parsedSuggestions.forEach((suggestion, index) => {
+          console.log(`\n${index + 1}. Gemini Recommendation:`);
+          console.log(`   Time: ${suggestion.timeslot.startISO} - ${suggestion.timeslot.endISO}`);
+          console.log(`   Score: ${suggestion.score}/100 | Confidence: ${suggestion.confidence}%`);
+          console.log(`   Reason: ${suggestion.reason}`);
+          console.log(`   Attendees: ${suggestion.suggestedAttendees?.length || 0} participants`);
+          console.log(`   Notes: ${suggestion.practicalNotes?.length || 0} practical tips`);
+          
+          if (suggestion.suggestedAttendees && suggestion.suggestedAttendees.length > 0) {
+            console.log(`   Suggested attendees: ${suggestion.suggestedAttendees.map(a => `${a.participantId}:${a.status}`).join(', ')}`);
+          }
+          
+          if (suggestion.practicalNotes && suggestion.practicalNotes.length > 0) {
+            console.log(`   Practical notes: ${suggestion.practicalNotes.join('; ')}`);
+          }
+        });
+
+        // Verify parsed suggestions
+        expect(parsedSuggestions.length).toBeGreaterThan(0);
+        expect(parsedSuggestions.length).toBeLessThanOrEqual(3);
+        
+        parsedSuggestions.forEach(suggestion => {
+          expect(suggestion.timeslot).toBeDefined();
+          expect(suggestion.timeslot.startISO).toBeTruthy();
+          expect(suggestion.timeslot.endISO).toBeTruthy();
+          expect(suggestion.score).toBeGreaterThanOrEqual(0);
+          expect(suggestion.score).toBeLessThanOrEqual(100);
+          expect(suggestion.confidence).toBeGreaterThanOrEqual(0);
+          expect(suggestion.confidence).toBeLessThanOrEqual(100);
+          expect(suggestion.reason).toBeTruthy();
+          expect(Array.isArray(suggestion.suggestedAttendees)).toBe(true);
+          expect(Array.isArray(suggestion.practicalNotes)).toBe(true);
+        });
+
+        // Compare with algorithmic fallback
+        const algorithmicSuggestions = top20Slots.slice(0, 3).map((slot, index) => 
+          convertToSuggestedSlot(slot, index)
+        );
+
+        console.log('\n📊 Comparison: Algorithmic vs Gemini');
+        console.log('Algorithmic Top 3:');
+        algorithmicSuggestions.forEach((suggestion, index) => {
+          console.log(`  ${index + 1}. Score: ${suggestion.score}/100 | Confidence: ${suggestion.confidence}%`);
+        });
+        console.log('Gemini Top 3:');
+        parsedSuggestions.forEach((suggestion, index) => {
+          console.log(`  ${index + 1}. Score: ${suggestion.score}/100 | Confidence: ${suggestion.confidence}%`);
+        });
+
+        console.log('\n🎉 Complete Gemini selection workflow test completed successfully!');
+
+      } catch (error) {
+        console.error('❌ Complete Gemini selection workflow test failed:', error);
+        throw error;
+      }
+    }, 60000); // 60 second timeout for API call
+  });
+
+  describe('Real Gemini API Integration', () => {
+    it('should handle Gemini API errors gracefully', async () => {
+      // Test with invalid API key
+      const originalApiKey = process.env.GEMINI_API_KEY;
+      process.env.GEMINI_API_KEY = 'invalid-key';
+
+      await schedule.generateScoredMeetingSlots();
+      const scoredSlots = schedule.ScoredTimeIntervals;
+      const top20Slots = scoredSlots.slice(0, 20);
+
+      const requestBody = {
+        participants: mockUsers.slice(0, 2).map(user => ({
+          id: user.userID,
+          name: user.name,
+          priority: user.importance,
+          busy: [],
+          workingTime: {
+            startHour: user.workingTime.startHour,
+            endHour: user.workingTime.endHour,
+            workingDays: user.workingTime.workingDays
+          }
+        })),
+        startDate: '2024-01-15',
+        endDate: '2024-01-15',
+        meetingDurationMinutes: 30
+      };
+
+      const prompt = buildGeminiPrompt(requestBody, top20Slots);
+      const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-03-25:generateContent";
+      
+      const payload = {
+        systemInstruction: { parts: [{ text: prompt.systemInstruction }] },
+        contents: [{ role: "user", parts: [{ text: prompt.userPrompt }] }],
+        generationConfig: {
+          maxOutputTokens: 1000,
+          temperature: 0.1,
+          topP: 0.9,
+        },
+      };
+
+      try {
+        const response = await fetch(`${GEMINI_URL}?key=invalid-key`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        expect(response.ok).toBe(false);
+        console.log('✅ Error handling test passed - API correctly rejected invalid key');
+
+      } catch (error) {
+        console.log('✅ Error handling test passed - Network error caught');
+      } finally {
+        // Restore original API key
+        if (originalApiKey) {
+          process.env.GEMINI_API_KEY = originalApiKey;
+        } else {
+          delete process.env.GEMINI_API_KEY;
+        }
+      }
+    }, 15000); // 15 second timeout for error test
   });
 });

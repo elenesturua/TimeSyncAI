@@ -63,7 +63,7 @@ type ResponseBody = {
   error?: string;
 };
 
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-03-25:generateContent";
 
 /**
  * Generate scored meeting slots using the Schedule system
