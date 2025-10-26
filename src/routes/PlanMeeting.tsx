@@ -576,6 +576,24 @@ export default function PlanMeeting() {
       ];
 
       // Generate AI-powered suggestions
+      // Calculate working hours based on preferred hours
+      let startHour = 9; // default
+      let endHour = 17; // default
+      
+      if (preferredHours.includes('custom')) {
+        startHour = parseInt(customHours.start.split(':')[0]);
+        endHour = parseInt(customHours.end.split(':')[0]);
+      } else {
+        // Calculate the earliest start and latest end from selected ranges
+        const selectedRanges = hourRanges.filter(range => preferredHours.includes(range.id));
+        if (selectedRanges.length > 0) {
+          startHour = Math.min(...selectedRanges.map(r => parseInt(r.start.split(':')[0])));
+          endHour = Math.max(...selectedRanges.map(r => parseInt(r.end.split(':')[0])));
+        }
+      }
+      
+      console.log('📅 Using preferred hours:', { preferredHours, startHour, endHour });
+      
       const result = await AISchedulingService.generateAISuggestions(
         {
           participants: allParticipants,
@@ -583,8 +601,8 @@ export default function PlanMeeting() {
           endDate: dateRange.end,
           durationMinutes: duration,
           workingHours: {
-            start: parseInt(customHours.start.split(':')[0]),
-            end: parseInt(customHours.end.split(':')[0])
+            start: startHour,
+            end: endHour
           }
         },
         instance as any
