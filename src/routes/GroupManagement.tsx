@@ -482,8 +482,8 @@ export default function GroupManagement() {
                     </>
                   ) : (
                     <>
-                      <Mail className="h-4 w-4" />
-                      <span>Create Group & Send Invitations</span>
+                      <Users className="h-4 w-4" />
+                      <span>Create Group</span>
                     </>
                   )}
                 </button>
