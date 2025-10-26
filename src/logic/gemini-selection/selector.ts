@@ -148,11 +148,15 @@ export function buildGeminiPrompt(body: RequestBody, scoredSlots: ScoredTimeInte
   const timeslotText = scoredSlots
     .slice(0, 10) // Limit to top 10 slots
     .map((slot, index) => {
-      const duration = Math.round((slot.end.getTime() - slot.start.getTime()) / 60000);
+      // Handle both Date objects and ISO strings
+      const startTime = slot.start instanceof Date ? slot.start : new Date(slot.start);
+      const endTime = slot.end instanceof Date ? slot.end : new Date(slot.end);
+      
+      const duration = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
       const availableParticipants = slot.participants.available.map((u: User) => u.userID).join(', ');
       const unavailableParticipants = slot.participants.unavailable.map((u: User) => u.userID).join(', ');
       
-      return `- id:slot_${index + 1} start:${slot.start.toISOString()} end:${slot.end.toISOString()} duration:${duration}m score:${slot.score.toFixed(2)} available:[${availableParticipants}] unavailable:[${unavailableParticipants}]`;
+      return `- id:slot_${index + 1} start:${startTime.toISOString()} end:${endTime.toISOString()} duration:${duration}m score:${slot.score.toFixed(2)} available:[${availableParticipants}] unavailable:[${unavailableParticipants}]`;
     })
     .join("\n");
 
@@ -375,8 +379,13 @@ function buildChatPrompt(chatRequest: ChatRequest) {
     .slice(0, 10) // Show next 10 alternatives
     .map((slot, index) => {
       const slotId = `slot_${currentSuggestions.length + index + 1}`;
-      const duration = Math.round((slot.end.getTime() - slot.start.getTime()) / 60000);
-      return `${slotId}: ${slot.start.toISOString()} - ${slot.end.toISOString()} (${duration}min, Score: ${slot.score.toFixed(2)})`;
+      
+      // Handle both Date objects and ISO strings
+      const startTime = slot.start instanceof Date ? slot.start : new Date(slot.start);
+      const endTime = slot.end instanceof Date ? slot.end : new Date(slot.end);
+      
+      const duration = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
+      return `${slotId}: ${startTime.toISOString()} - ${endTime.toISOString()} (${duration}min, Score: ${slot.score.toFixed(2)})`;
     }).join('\n');
 
   // Build conversation history
@@ -475,9 +484,10 @@ function parseChatResponse(responseText: string, allAvailableSlots: ScoredTimeIn
         } else if (slotMatch[2]) {
           // Format: ISO timestamp - find matching slot
           const timestamp = slotMatch[2];
-          slotIndex = allAvailableSlots.findIndex(slot => 
-            slot.start.toISOString().includes(timestamp)
-          );
+          slotIndex = allAvailableSlots.findIndex(slot => {
+            const startTime = slot.start instanceof Date ? slot.start : new Date(slot.start);
+            return startTime.toISOString().includes(timestamp);
+          });
         }
         
         if (slotIndex >= 0 && slotIndex < allAvailableSlots.length) {
@@ -536,7 +546,7 @@ export async function chatWithSchedulingAssistant(chatRequest: ChatRequest): Pro
       systemInstruction: { parts: [{ text: promptBundle.systemInstruction }] },
       contents: [{ role: "user", parts: [{ text: promptBundle.userPrompt }] }],
       generationConfig: {
-        maxOutputTokens: 1500,
+        maxOutputTokens: 4000,
         temperature: 0.3,
         topP: 0.8,
       },
@@ -695,11 +705,15 @@ export function convertToSuggestedSlot(scoredSlot: ScoredTimeInterval, index: nu
     `Mid-priority attendance: ${Math.round(scoredSlot.midAttendance * 100)}%. ` +
     `Overall score: ${scoredSlot.score.toFixed(1)} based on priority-weighted availability.`;
 
+  // Handle both Date objects and ISO strings
+  const startTime = scoredSlot.start instanceof Date ? scoredSlot.start : new Date(scoredSlot.start);
+  const endTime = scoredSlot.end instanceof Date ? scoredSlot.end : new Date(scoredSlot.end);
+
   return {
     timeslot: {
       id: `slot_${index + 1}`,
-      startISO: scoredSlot.start.toISOString(),
-      endISO: scoredSlot.end.toISOString()
+      startISO: startTime.toISOString(),
+      endISO: endTime.toISOString()
     },
     score: Math.round(scoredSlot.score * 100), // Convert to 0-100 scale
     confidence: Math.max(60, Math.min(95, Math.round(scoredSlot.score * 100 + 10))),
@@ -841,11 +855,14 @@ export async function POST(request: Request) {
       diagnostics: {
         totalSlotsGenerated: scoredSlots.length,
         scoringMethod: "Schedule system with priority-weighted attendance",
-        topScores: scoredSlots.slice(0, 5).map(s => ({
-          start: s.start.toISOString(),
-          score: s.score,
-          attendance: s.overallAttendance
-        }))
+        topScores: scoredSlots.slice(0, 5).map(s => {
+          const startTime = s.start instanceof Date ? s.start : new Date(s.start);
+          return {
+            start: startTime.toISOString(),
+            score: s.score,
+            attendance: s.overallAttendance
+          };
+        })
       }
     };
 
