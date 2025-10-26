@@ -2,5 +2,10 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
-  "framework": "vite"
+  "framework": "vite",
+  "functions": {
+    "api/send-invite.ts": {
+      "maxDuration": 30
+    }
+  }
 }
