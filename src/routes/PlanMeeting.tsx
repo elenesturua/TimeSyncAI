@@ -7,6 +7,11 @@ import SuggestionCard from '@/components/SuggestionCard';
 import CopyButton from '@/components/CopyButton';
 import { type Group, emailApi } from '@/lib/api';
 import { createGraphClient, getUserProfile, getCalendarEvents, findAvailableSlots, type CalendarEvent } from '@/lib/graphApi';
+import { InvitationService } from '@/services/invitationService';
+import { CalendarService } from '@/services/calendarService';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, doc, updateDoc, getDocs, query, where } from 'firebase/firestore';
+import { Meeting, User as FirestoreUser } from '@/types/firestore';
 
 interface Participant {
   email: string;
@@ -46,9 +51,14 @@ export default function PlanMeeting() {
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   
+  // Firebase integration state
+  const [currentUser, setCurrentUser] = useState<FirestoreUser | null>(null);
+  const [isCreatingMeeting, setIsCreatingMeeting] = useState(false);
+  const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
+  
   // Step-by-step flow state
   const [currentStep, setCurrentStep] = useState<'who' | 'when' | 'suggestions' | 'booking'>('who');
-  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
   
   // Calendar state
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -134,6 +144,115 @@ export default function PlanMeeting() {
     const defaultRange = getDefaultDateRange();
     setDateRange(defaultRange);
   }, []);
+
+  // Initialize current user in Firebase
+  useEffect(() => {
+    if (isAuthenticated && account) {
+      initializeCurrentUser();
+    }
+  }, [isAuthenticated, account]);
+
+  const initializeCurrentUser = async () => {
+    if (!account) return;
+    
+    try {
+      // Check if user exists in Firestore
+      const userQuery = query(
+        collection(db, 'users'),
+        where('email', '==', account.username)
+      );
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (userSnapshot.empty) {
+        // Create new user
+        const newUser: Omit<FirestoreUser, 'id'> = {
+          email: account.username,
+          displayName: account.name || account.username,
+          microsoftAccountId: account.homeAccountId,
+          calendarConnected: false,
+          createdAt: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
+        };
+        
+        const docRef = await addDoc(collection(db, 'users'), newUser);
+        setCurrentUser({ id: docRef.id, ...newUser });
+      } else {
+        // User exists, update last active
+        const userDoc = userSnapshot.docs[0];
+        const userData = { id: userDoc.id, ...userDoc.data() } as FirestoreUser;
+        
+        await updateDoc(doc(db, 'users', userDoc.id), {
+          lastActive: new Date().toISOString(),
+        });
+        
+        setCurrentUser(userData);
+      }
+    } catch (error) {
+      console.error('Error initializing user:', error);
+    }
+  };
+
+  // Send invitations to participants
+  const sendInvitations = async () => {
+    if (!currentUser || !meetingId) return;
+    
+    setIsCreatingMeeting(true);
+    try {
+      const invitationPromises = participants.map(participant => 
+        InvitationService.createInvitation(
+          meetingId,
+          currentUser.id,
+          participant.email
+        )
+      );
+      
+      await Promise.all(invitationPromises);
+      
+      // Update meeting with invitation IDs
+      const invitationIds = await Promise.all(invitationPromises);
+      await updateDoc(doc(db, 'meetings', meetingId), {
+        invitations: invitationIds,
+        status: 'draft'
+      });
+      
+      console.log('Invitations sent successfully!');
+    } catch (error) {
+      console.error('Error sending invitations:', error);
+    } finally {
+      setIsCreatingMeeting(false);
+    }
+  };
+
+  // Create meeting in Firebase
+  const createMeeting = async () => {
+    if (!currentUser) return;
+    
+    try {
+      const meetingData: Omit<Meeting, 'id'> = {
+        organizerId: currentUser.id,
+        title: 'New Meeting',
+        duration,
+        dateRange: {
+          start: dateRange.start,
+          end: dateRange.end,
+        },
+        preferredHours,
+        participants: [], // Will be populated when participants accept invitations
+        invitations: [],
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      const docRef = await addDoc(collection(db, 'meetings'), meetingData);
+      setMeetingId(docRef.id);
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating meeting:', error);
+      return null;
+    }
+  };
 
   const loadGroups = async () => {
     if (!isAuthenticated) return;
@@ -279,87 +398,125 @@ export default function PlanMeeting() {
   const getSuggestions = async () => {
     if (participants.length === 0) return;
 
-    // Use calendar-based suggestions if calendar is connected
-    if (isCalendarConnected) {
-      await generateSuggestions();
-      return;
-    }
-
-    // Fallback to mock suggestions if calendar not connected
     setIsLoadingSuggestions(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // First, create meeting if not exists
+      if (!meetingId) {
+        const newMeetingId = await createMeeting();
+        if (!newMeetingId) return;
+      }
       
-      // Mock suggestions
-      const mockSuggestions: Suggestion[] = [
-        {
-          startISO: '2024-01-15T10:00:00Z',
-          endISO: '2024-01-15T11:00:00Z',
-          attendeesFree: participants.map(p => p.email),
+      // Get all participant user IDs from Firestore
+      const participantEmails = participants.map(p => p.email);
+      const participantQuery = query(
+        collection(db, 'users'),
+        where('email', 'in', participantEmails)
+      );
+      const participantSnapshot = await getDocs(participantQuery);
+      const participantUserIds = participantSnapshot.docs.map(doc => doc.id);
+      
+      // Add current user to participants
+      const allUserIds = currentUser ? [currentUser.id, ...participantUserIds] : participantUserIds;
+      
+      if (allUserIds.length === 0) {
+        // Fallback to mock suggestions if no users found
+        await generateMockSuggestions();
+        return;
+      }
+      
+      // Get calendar events for all participants
+      const startDate = new Date(dateRange.start);
+      const endDate = new Date(dateRange.end);
+      
+      const availableSlots = await CalendarService.findAvailableSlots(
+        allUserIds,
+        startDate,
+        endDate,
+        duration,
+        customHours
+      );
+      
+      // Convert to suggestions format
+      const newSuggestions: Suggestion[] = availableSlots.slice(0, 5).map((slot, index) => {
+        const endSlot = new Date(slot.getTime() + duration * 60000);
+        return {
+          startISO: slot.toISOString(),
+          endISO: endSlot.toISOString(),
+          attendeesFree: participantEmails,
           attendeesMissing: [],
-          badges: ['Perfect match', 'All available'],
-          reason: 'All participants are free during this time slot'
-        },
-        {
-          startISO: '2024-01-15T14:00:00Z',
-          endISO: '2024-01-15T15:00:00Z',
-          attendeesFree: participants.slice(0, -1).map(p => p.email),
-          attendeesMissing: participants.slice(-1).map(p => p.email),
-          badges: ['Good match', '1 conflict'],
-          reason: 'One participant has a minor conflict but can reschedule'
-        },
-        {
-          startISO: '2024-01-16T09:00:00Z',
-          endISO: '2024-01-16T10:00:00Z',
-          attendeesFree: participants.map(p => p.email),
-          attendeesMissing: [],
-          badges: ['Available', 'Next day'],
-          reason: 'All participants available, scheduled for next day'
-        }
-      ];
-
-      setSuggestions(mockSuggestions);
+          badges: ['All free', 'AI suggested'],
+          reason: `Optimal time slot ${index + 1} based on all participants' calendars`
+        };
+      });
+      
+      if (newSuggestions.length > 0) {
+        setSuggestions(newSuggestions);
+      } else {
+        // Fallback to mock suggestions if no slots found
+        await generateMockSuggestions();
+      }
+      
     } catch (error) {
-      console.error('Failed to get suggestions:', error);
+      console.error('Error getting suggestions:', error);
+      // Fallback to mock suggestions on error
+      await generateMockSuggestions();
     } finally {
       setIsLoadingSuggestions(false);
     }
   };
 
+  const generateMockSuggestions = async () => {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Mock suggestions
+    const mockSuggestions: Suggestion[] = [
+      {
+        startISO: '2024-01-15T10:00:00Z',
+        endISO: '2024-01-15T11:00:00Z',
+        attendeesFree: participants.map(p => p.email),
+        attendeesMissing: [],
+        badges: ['Perfect match', 'All available'],
+        reason: 'All participants are free during this time slot'
+      },
+      {
+        startISO: '2024-01-15T14:00:00Z',
+        endISO: '2024-01-15T15:00:00Z',
+        attendeesFree: participants.slice(0, -1).map(p => p.email),
+        attendeesMissing: participants.slice(-1).map(p => p.email),
+        badges: ['Good match', '1 conflict'],
+        reason: 'One participant has a minor conflict but can reschedule'
+      },
+      {
+        startISO: '2024-01-16T09:00:00Z',
+        endISO: '2024-01-16T10:00:00Z',
+        attendeesFree: participants.map(p => p.email),
+        attendeesMissing: [],
+        badges: ['Available', 'Next day'],
+        reason: 'All participants available, scheduled for next day'
+      }
+    ];
+
+    setSuggestions(mockSuggestions);
+  };
+
   const handleBook = async (booking: any) => {
     try {
-      // TODO: Book meeting via backend
-      console.log('Booking meeting:', booking);
+      // Send invitations to participants via Firebase
+      await sendInvitations();
       
-      // Send email invites to all participants
-      const emailPromises = participants.map(participant => 
-        emailApi.sendInvite({
-          to: participant.email,
-          organizerName: account?.name || 'TimeSyncAI User',
-          organizerEmail: account?.username || 'noreply@timesyncai.com',
-          plan: booking.description || 'Meeting scheduled via TimeSyncAI',
-          meeting: {
-            title: booking.title || 'Team Meeting',
-            description: booking.description || 'Meeting scheduled via TimeSyncAI',
-            location: booking.location || 'Virtual Meeting',
-            startISO: selectedSuggestion?.startISO || new Date().toISOString(),
-            endISO: selectedSuggestion?.endISO || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          }
-        })
-      );
-
-      // Send all emails
-      const emailResults = await Promise.allSettled(emailPromises);
-      
-      // Check if any emails failed
-      const failedEmails = emailResults
-        .map((result, index) => ({ result, participant: participants[index] }))
-        .filter(({ result }) => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.success));
-
-      if (failedEmails.length > 0) {
-        console.warn('Some emails failed to send:', failedEmails);
+      // Update meeting with scheduled time
+      if (meetingId) {
+        await updateDoc(doc(db, 'meetings', meetingId), {
+          scheduledTime: {
+            start: selectedSuggestion?.startISO || booking.startTime,
+            end: selectedSuggestion?.endISO || booking.endTime,
+          },
+          status: 'scheduled',
+          updatedAt: new Date().toISOString(),
+        });
       }
+      
+      console.log('Meeting booked and invitations sent:', booking);
       
       // Navigate to success page
       navigate('/meeting-sent', { 
@@ -368,7 +525,7 @@ export default function PlanMeeting() {
             ...booking,
             meetingLink: 'https://teams.microsoft.com/l/meetup-join/...',
             attendees: participants.map(p => p.email),
-            emailResults: emailResults.map(r => r.status === 'fulfilled' ? r.value : null)
+            meetingId: meetingId
           }
         } 
       });

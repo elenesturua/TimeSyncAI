@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MsalProvider } from '@azure/msal-react';
 import LandingPage from "@/routes/LandingPage";
+import GroupManagement from "@/routes/GroupManagement";
 import PlanMeeting from "@/routes/PlanMeeting";
 import Dashboard from "@/routes/Dashboard";
 import CreateMeeting from "@/routes/CreateMeeting";
@@ -12,6 +13,7 @@ import Groups from "@/routes/Groups";
 import Profile from "@/routes/Profile";
 import TestEmail from "@/routes/TestEmail";
 import CalendarDebug from "@/routes/CalendarDebug";
+import InviteAcceptance from "@/routes/InviteAcceptance";
 import { PageLayout } from "@/components/PageLayout";
 import "@/styles/tailwind.css";
 
@@ -39,17 +41,19 @@ const App = ({ instance }: { instance: any }) => {
           <div className="min-h-screen">
             <PageLayout>
               <Routes>
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/plan" element={<div className="bg-gray-50 min-h-screen"><PlanMeeting /></div>} />
-                <Route path="/dashboard" element={<div className="bg-gray-50 min-h-screen"><Dashboard /></div>} />
-                <Route path="/create-meeting" element={<div className="bg-gray-50 min-h-screen"><CreateMeeting /></div>} />
-                <Route path="/meeting-sent" element={<div className="bg-gray-50 min-h-screen"><MeetingSent /></div>} />
-                <Route path="/meeting/:id" element={<div className="bg-gray-50 min-h-screen"><MeetingRoom /></div>} />
-                <Route path="/meeting/:id/success" element={<div className="bg-gray-50 min-h-screen"><Success /></div>} />
-                    <Route path="/groups" element={<div className="bg-gray-50 min-h-screen"><Groups /></div>} />
-                            <Route path="/profile" element={<div className="bg-gray-50 min-h-screen"><Profile /></div>} />
-                    <Route path="/test-email" element={<div className="bg-gray-50 min-h-screen"><TestEmail /></div>} />
-                    <Route path="/calendar-debug" element={<div className="bg-gray-50 min-h-screen"><CalendarDebug /></div>} />
+                        <Route path="/" element={<LandingPage />} />
+                        <Route path="/groups" element={<div className="bg-gray-50 min-h-screen"><GroupManagement /></div>} />
+                        <Route path="/plan" element={<div className="bg-gray-50 min-h-screen"><PlanMeeting /></div>} />
+                        <Route path="/dashboard" element={<div className="bg-gray-50 min-h-screen"><Dashboard /></div>} />
+                        <Route path="/create-meeting" element={<div className="bg-gray-50 min-h-screen"><CreateMeeting /></div>} />
+                        <Route path="/meeting-sent" element={<div className="bg-gray-50 min-h-screen"><MeetingSent /></div>} />
+                        <Route path="/meeting/:id" element={<div className="bg-gray-50 min-h-screen"><MeetingRoom /></div>} />
+                        <Route path="/meeting/:id/success" element={<div className="bg-gray-50 min-h-screen"><Success /></div>} />
+                        <Route path="/groups-old" element={<div className="bg-gray-50 min-h-screen"><Groups /></div>} />
+                        <Route path="/profile" element={<div className="bg-gray-50 min-h-screen"><Profile /></div>} />
+                        <Route path="/test-email" element={<div className="bg-gray-50 min-h-screen"><TestEmail /></div>} />
+                        <Route path="/calendar-debug" element={<div className="bg-gray-50 min-h-screen"><CalendarDebug /></div>} />
+                        <Route path="/invite/:token" element={<InviteAcceptance />} />
               </Routes>
             </PageLayout>
           </div>

@@ -125,7 +125,7 @@ export interface SendInviteResponse {
 }
 
 // Email API - connects to local backend server
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787';
 
 export const emailApi = {
   sendInvite: async (data: SendInviteRequest): Promise<SendInviteResponse> => {
