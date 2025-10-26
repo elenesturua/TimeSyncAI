@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Mail, Calendar, X } from 'lucide-react';
+import { Users, Plus, Calendar, X } from 'lucide-react';
 import { useMsal } from '@azure/msal-react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 import { ParticipantGroup, User as FirestoreUser } from '@/types/firestore';
-import { testFirebaseConnection } from '@/utils/firebaseTest';
 import { InvitationService } from '@/services/invitationService';
 
 interface Participant {
@@ -26,7 +25,6 @@ export default function GroupManagement() {
   const [groups, setGroups] = useState<ParticipantGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
-  const [isSendingInvites, setIsSendingInvites] = useState(false);
   
   // New group form
   const [newGroupName, setNewGroupName] = useState('');
@@ -215,12 +213,6 @@ export default function GroupManagement() {
       const failed = invitationResults.filter(r => !r.success).length;
       console.log(`✅ Invitation sending complete: ${succeeded} succeeded, ${failed} failed`);
       
-      if (failed > 0) {
-        alert(`Group created successfully! Sent ${succeeded} invitations, but ${failed} failed. Check console for details.`);
-      } else {
-        alert(`Group created successfully! All ${succeeded} invitations sent.`);
-      }
-      
       // Reset form
       setNewGroupName('');
       setNewGroupParticipants([]);
@@ -241,27 +233,6 @@ export default function GroupManagement() {
       console.error('Full error object:', error);
     } finally {
       setIsCreatingGroup(false);
-    }
-  };
-
-  const sendGroupInvitations = async (groupId: string) => {
-    if (!currentUser) return;
-    
-    setIsSendingInvites(true);
-    try {
-      console.log('Sending invitations for group:', groupId);
-      
-      // For now, just show a success message
-      // In a real app, you'd track who has already been invited
-      console.log('Group invitations sent successfully!');
-      
-      // Reload groups to update status
-      await loadGroups();
-      
-    } catch (error) {
-      console.error('Error sending group invitations:', error);
-    } finally {
-      setIsSendingInvites(false);
     }
   };
 
@@ -302,55 +273,6 @@ export default function GroupManagement() {
       
     } catch (error) {
       console.error('❌ Error deleting group:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const clearAllGroups = async () => {
-    if (!currentUser) return;
-    
-    if (!confirm('Are you sure you want to delete ALL groups? This action cannot be undone.')) {
-      return;
-    }
-    
-    setIsLoading(true);
-    try {
-      console.log('🗑️ Clearing all groups for user:', currentUser.id);
-      
-      // Get all groups for this user
-      const groupsQuery = query(
-        collection(db, 'participantGroups'),
-        where('ownerId', '==', currentUser.id)
-      );
-      const groupsSnapshot = await getDocs(groupsQuery);
-      
-      // Delete all groups
-      const deleteGroupPromises = groupsSnapshot.docs.map(docSnapshot => 
-        deleteDoc(doc(db, 'participantGroups', docSnapshot.id))
-      );
-      await Promise.all(deleteGroupPromises);
-      
-      // Delete all associated invitations
-      const groupIds = groupsSnapshot.docs.map(doc => doc.id);
-      const invitationsQuery = query(
-        collection(db, 'invitations'),
-        where('meetingId', 'in', groupIds)
-      );
-      const invitationsSnapshot = await getDocs(invitationsQuery);
-      
-      const deleteInvitationPromises = invitationsSnapshot.docs.map(docSnapshot => 
-        deleteDoc(doc(db, 'invitations', docSnapshot.id))
-      );
-      await Promise.all(deleteInvitationPromises);
-      
-      console.log('✅ All groups and invitations deleted successfully');
-      
-      // Reload groups
-      await loadGroups();
-      
-    } catch (error) {
-      console.error('❌ Error clearing groups:', error);
     } finally {
       setIsLoading(false);
     }
@@ -398,30 +320,6 @@ export default function GroupManagement() {
             <Plus className="h-5 w-5" />
             <span>Create Group</span>
           </button>
-          
-          <button
-            onClick={async () => {
-              console.log('🧪 Testing Firebase connection...');
-              const success = await testFirebaseConnection();
-              if (success) {
-                alert('✅ Firebase connection successful!');
-              } else {
-                alert('❌ Firebase connection failed! Check console for details.');
-              }
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Test Firebase
-          </button>
-          
-          {groups.length > 0 && (
-            <button
-              onClick={clearAllGroups}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Clear All Groups
-            </button>
-          )}
         </div>
 
         {/* New Group Form */}
@@ -510,12 +408,12 @@ export default function GroupManagement() {
                   {isCreatingGroup ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Creating...</span>
+                      <span>Creating & Sending Invites...</span>
                     </>
                   ) : (
                     <>
                       <Users className="h-4 w-4" />
-                      <span>Create Group</span>
+                      <span>Create Group & Send Invites</span>
                     </>
                   )}
                 </button>
@@ -560,19 +458,10 @@ export default function GroupManagement() {
                     </p>
                   </div>
                   
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => sendGroupInvitations(group.id)}
-                      disabled={isSendingInvites}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
-                    >
-                      <Mail className="h-4 w-4" />
-                      <span>Send Invites</span>
-                    </button>
-                    
+                  <div className="flex space-x-3">
                     <button
                       onClick={() => createMeetingFromGroup(group.id)}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                      className="px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-all duration-200 shadow-sm hover:shadow flex items-center space-x-2 font-medium"
                     >
                       <Calendar className="h-4 w-4" />
                       <span>Create Meeting</span>
@@ -580,7 +469,7 @@ export default function GroupManagement() {
                     
                     <button
                       onClick={() => deleteGroup(group.id)}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2"
+                      className="px-5 py-2.5 bg-transparent text-gray-500 border border-gray-300 rounded-lg hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all duration-200 flex items-center space-x-2 font-medium"
                     >
                       <X className="h-4 w-4" />
                       <span>Delete</span>
