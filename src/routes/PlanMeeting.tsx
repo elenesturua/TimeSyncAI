@@ -1061,53 +1061,7 @@ export default function PlanMeeting() {
               </div>
             </div>
 
-            {/* Advanced Options */}
-            <details className="group">
-              <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
-                Advanced options
-              </summary>
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Allow absences
-                  </label>
-                  <div className="flex space-x-2">
-                    {[0, 1].map((absences) => (
-                      <button
-                        key={absences}
-                        onClick={() => setAllowAbsences(absences)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          allowAbsences === absences
-                            ? 'bg-primary-100 text-primary-700 border-2 border-primary-300'
-                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                        }`}
-                      >
-                        {absences === 0 ? 'All must attend' : 'Allow 1 absence'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </details>
-
-            {/* Continue Button */}
-            {currentStep === 'when' && (
-              <div className="pt-4 border-t border-gray-200">
-                <button
-                  onClick={nextStep}
-                  disabled={!canProceedFromWhen()}
-                  className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
-                    canProceedFromWhen()
-                      ? 'bg-primary-600 text-white hover:bg-primary-700'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  Get AI Suggestions
-                </button>
-              </div>
-            )}
-
-            {/* Calendar Connection */}
+            {/* Calendar Connection - Placed before AI Suggestions */}
             {currentStep === 'when' && (
               <div className="pt-4 border-t border-gray-200">
                 <div className="flex items-center justify-between">
@@ -1155,7 +1109,7 @@ export default function PlanMeeting() {
                 {isCalendarConnected && (
                   <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-sm text-blue-800">
-                      📅 Found {calendarEvents.length} events in the next 7 days
+                      📅 Found {calendarEvents.length} events in the selected date range
                     </p>
                     {calendarEvents.length > 0 && (
                       <details className="mt-2">
@@ -1181,6 +1135,52 @@ export default function PlanMeeting() {
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Advanced Options */}
+            <details className="group">
+              <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                Advanced options
+              </summary>
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Allow absences
+                  </label>
+                  <div className="flex space-x-2">
+                    {[0, 1].map((absences) => (
+                      <button
+                        key={absences}
+                        onClick={() => setAllowAbsences(absences)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          allowAbsences === absences
+                            ? 'bg-primary-100 text-primary-700 border-2 border-primary-300'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {absences === 0 ? 'All must attend' : 'Allow 1 absence'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            {/* Continue Button */}
+            {currentStep === 'when' && (
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={nextStep}
+                  disabled={!canProceedFromWhen()}
+                  className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                    canProceedFromWhen()
+                      ? 'bg-primary-600 text-white hover:bg-primary-700'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Get AI Suggestions
+                </button>
               </div>
             )}
             </div>
