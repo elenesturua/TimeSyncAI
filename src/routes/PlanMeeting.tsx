@@ -263,17 +263,18 @@ export default function PlanMeeting() {
     
     setIsCreatingMeeting(true);
     try {
-      // suggestion.startISO and endISO are in UTC format (from toISOString())
-      // They need to be sent as UTC for proper calendar invite handling
-      // The backend will handle timezone conversion for display
-      const startUTC = suggestion.startISO; // Already UTC
-      const endUTC = suggestion.endISO; // Already UTC
+      // Convert suggestion times to local Chicago time for proper display
+      // The backend expects UTC times, but we need to adjust for display
+      const startUTC = new Date(suggestion.startISO);
+      const endUTC = new Date(suggestion.endISO);
       
       console.log('📧 Sending invitations with meeting time:', {
-        startISO: suggestion.startISO,
-        endISO: suggestion.endISO,
-        startTime_local: new Date(suggestion.startISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
-        endTime_local: new Date(suggestion.endISO).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        startISO_original: suggestion.startISO,
+        endISO_original: suggestion.endISO,
+        startTime_local: startUTC.toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        endTime_local: endUTC.toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+        startUTC_sending: startUTC.toISOString(),
+        endUTC_sending: endUTC.toISOString(),
         duration: `${duration} minutes`
       });
 
@@ -290,8 +291,8 @@ export default function PlanMeeting() {
             title: 'Team Meeting',
             description: 'Meeting scheduled via TimeSyncAI',
             location: 'Virtual Meeting',
-            startISO: startUTC,
-            endISO: endUTC,
+            startISO: startUTC.toISOString(),
+            endISO: endUTC.toISOString(),
             timezone: 'America/Chicago'
           }
         };
