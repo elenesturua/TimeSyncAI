@@ -496,15 +496,34 @@ export class Schedule {
    * @returns Promise<ScoredTimeInterval[]> - Array of scored meeting slots sorted by preference
    */
   async generateScoredMeetingSlots(): Promise<void> {
+    await this.generateScoredMeetingSlotsInternal(true);
+  }
+
+  /**
+   * Generate scored meeting slots without fetching calendars (when data is already provided)
+   */
+  async generateScoredMeetingSlotsWithoutFetching(): Promise<void> {
+    await this.generateScoredMeetingSlotsInternal(false);
+  }
+
+  /**
+   * Internal method to generate scored meeting slots
+   */
+  private async generateScoredMeetingSlotsInternal(shouldFetchCalendars: boolean): Promise<void> {
     try {
-      // Update busy schedules for all users
+      // Update busy schedules for all users (only if needed)
       const allUsers = this.getAllUsers();
       if (allUsers.length === 0) {
         console.warn('No users found');
         return;
       }
 
-      await Promise.all(allUsers.map(user => user.updateBusySchedule(this.StartDate.toISOString().split('T')[0], this.EndDate.toISOString().split('T')[0])));
+      if (shouldFetchCalendars) {
+        console.log('Fetching calendars for users via MS Graph...');
+        await Promise.all(allUsers.map(user => user.updateBusySchedule(this.StartDate.toISOString().split('T')[0], this.EndDate.toISOString().split('T')[0])));
+      } else {
+        console.log('Skipping calendar fetch - using provided busy schedules');
+      }
       
       // Parse start and end dates
       const startDateObj = new Date(this.StartDate);
@@ -542,6 +561,8 @@ export class Schedule {
       
       // Sort by score (highest first)
       this.ScoredTimeIntervals.sort((a, b) => b.score - a.score);
+      
+      console.log(`Generated ${this.ScoredTimeIntervals.length} scored time intervals`);
       
     } catch (error) {
       console.error(`Error generating scored meeting slots:`, error);

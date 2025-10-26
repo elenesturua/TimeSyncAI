@@ -127,7 +127,8 @@ export async function generateScoredSlots(body: RequestBody): Promise<ScoredTime
     }
 
     // Generate scored meeting slots
-    await schedule.generateScoredMeetingSlots();
+    // Skip the automatic calendar fetching since we already have busy windows from Firestore
+    await schedule.generateScoredMeetingSlotsWithoutFetching();
     
     return schedule.ScoredTimeIntervals;
   } catch (error) {
