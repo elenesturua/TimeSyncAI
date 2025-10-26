@@ -1567,6 +1567,13 @@ export default function PlanMeeting() {
                     // Parse timezone-aware ISO strings (format: YYYY-MM-DDTHH:MM:SS±HH:MM)
                     const startDate = new Date(selectedSuggestion.startISO);
                     const endDate = new Date(selectedSuggestion.endISO);
+                    
+                    console.log('📅 Displaying booking confirmation:', {
+                      iso_string: selectedSuggestion.startISO,
+                      parsed_date: startDate.toString(),
+                      local_string: startDate.toLocaleString('en-US')
+                    });
+                    
                     return `${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
                   })()}
                 </p>

@@ -264,6 +264,14 @@ export class AISchedulingService {
       const startISO = formatChicagoISO(slot.start);
       const endISO = formatChicagoISO(slot.end);
       
+      // Debug logging
+      console.log('🔍 Converting slot to suggestion:', {
+        slot_start: slot.start.toString(),
+        slot_end: slot.end.toString(),
+        startISO,
+        endISO
+      });
+      
       return {
         startISO,
         endISO,
