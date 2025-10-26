@@ -129,11 +129,13 @@ export async function sendInviteEmail(req: Request, res: Response) {
         toEmail: parsed.to,
         plan: parsed.plan,
       });
-      attachments.push({
-        filename: "invite.ics",
-        content: ics,
-        contentType: "text/calendar; charset=utf-8; method=REQUEST",
-      });
+      if (ics) {
+        attachments.push({
+          filename: "invite.ics",
+          content: ics,
+          contentType: "text/calendar; charset=utf-8; method=REQUEST",
+        });
+      }
     } else if (parsed.options?.length) {
       parsed.options.forEach((opt, i) => {
         const ics = buildIcs(opt, {
@@ -142,11 +144,13 @@ export async function sendInviteEmail(req: Request, res: Response) {
           toEmail: parsed.to,
           plan: parsed.plan,
         });
-        attachments.push({
-          filename: `option-${i + 1}.ics`,
-          content: ics,
-          contentType: "text/calendar; charset=utf-8; method=REQUEST",
-        });
+        if (ics) {
+          attachments.push({
+            filename: `option-${i + 1}.ics`,
+            content: ics,
+            contentType: "text/calendar; charset=utf-8; method=REQUEST",
+          });
+        }
       });
     } else {
       return res.status(400).json({
