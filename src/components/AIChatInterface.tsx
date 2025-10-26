@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, MessageCircle, Sparkles } from 'lucide-react';
+import { Send, MessageCircle, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
 import { chatWithSchedulingAssistant } from '@/logic/gemini-selection/selector';
 import type { ChatMessage } from '@/logic/gemini-selection/selector';
 
@@ -21,12 +21,16 @@ interface AIChatInterfaceProps {
     badges: string[];
     reason: string;
   }>) => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 export default function AIChatInterface({
   allSlots,
   currentSuggestions: _,
-  onSuggestionsUpdate
+  onSuggestionsUpdate,
+  isExpanded = false,
+  onToggleExpand
 }: AIChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -117,16 +121,31 @@ export default function AIChatInterface({
   ];
 
   return (
-    <div className="h-[600px] bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col">
+    <div className={`${isExpanded ? 'fixed inset-0 z-50 rounded-none' : 'h-[600px] rounded-xl'} bg-white shadow-lg border border-gray-200 flex flex-col`}>
       {/* Chat Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50">
-        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-          <Sparkles className="h-5 w-5 text-white" />
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+            <Sparkles className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">AI Scheduling Assistant</h3>
+            <p className="text-xs text-gray-600">I can help you find the perfect meeting time</p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-semibold text-gray-900">AI Scheduling Assistant</h3>
-          <p className="text-xs text-gray-600">I can help you find the perfect meeting time</p>
-        </div>
+        {onToggleExpand && (
+          <button
+            onClick={onToggleExpand}
+            className="p-2 rounded-lg hover:bg-white/50 transition-colors"
+            aria-label={isExpanded ? 'Minimize chat' : 'Expand chat'}
+          >
+            {isExpanded ? (
+              <Minimize2 className="h-5 w-5 text-gray-600" />
+            ) : (
+              <Maximize2 className="h-5 w-5 text-gray-600" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* Messages Container */}

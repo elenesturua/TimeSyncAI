@@ -77,6 +77,9 @@ export default function PlanMeeting() {
   const [_isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [showGroupsDropdown, setShowGroupsDropdown] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  
+  // AI Chat expansion state
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
 
   // Step navigation functions
   const nextStep = () => {
@@ -1478,46 +1481,62 @@ export default function PlanMeeting() {
           
           {currentStep === 'suggestions' && (
             <div className="mt-6">
-              {/* Split view: AI Chat on left, Suggestions on right */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* AI Chat Interface */}
-                <div>
-                  <AIChatInterface
-                    allSlots={allAvailableSlots}
-                    currentSuggestions={suggestions}
-                    onSuggestionsUpdate={(newSuggestions) => {
-                      setSuggestions(newSuggestions);
-                    }}
-                  />
-                </div>
+              {/* Expanded Chat Overlay */}
+              {isChatExpanded && (
+                <AIChatInterface
+                  allSlots={allAvailableSlots}
+                  currentSuggestions={suggestions}
+                  onSuggestionsUpdate={(newSuggestions) => {
+                    setSuggestions(newSuggestions);
+                  }}
+                  isExpanded={isChatExpanded}
+                  onToggleExpand={() => setIsChatExpanded(!isChatExpanded)}
+                />
+              )}
+              
+              {/* Split view: AI Chat on left, Suggestions on right - only show when not expanded */}
+              {!isChatExpanded && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* AI Chat Interface */}
+                  <div>
+                    <AIChatInterface
+                      allSlots={allAvailableSlots}
+                      currentSuggestions={suggestions}
+                      onSuggestionsUpdate={(newSuggestions) => {
+                        setSuggestions(newSuggestions);
+                      }}
+                      isExpanded={isChatExpanded}
+                      onToggleExpand={() => setIsChatExpanded(!isChatExpanded)}
+                    />
+                  </div>
 
-                {/* Suggestions Display */}
-                <div>
-                  {suggestions.length === 0 ? (
-                    <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                      <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No suggestions yet</h3>
-                      <p className="text-gray-600 mb-4">
-                        Chat with the AI assistant to get personalized time slot recommendations
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                        <Star className="h-5 w-5 text-yellow-500" />
-                        AI Recommendations
-                      </h3>
-                      {suggestions.map((suggestion, index) => (
-                        <div
-                          key={index}
-                          className={`cursor-pointer transition-all duration-200 ${
-                            selectedSuggestion === suggestion
-                              ? 'ring-2 ring-primary-500 bg-primary-50'
-                              : 'hover:bg-gray-50'
-                          }`}
-                          onClick={() => setSelectedSuggestion(suggestion)}
-                        >
-                          <SuggestionCard
+                  {/* Suggestions Display */}
+                  <div>
+                    {suggestions.length === 0 ? (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                        <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No suggestions yet</h3>
+                        <p className="text-gray-600 mb-4">
+                          Chat with the AI assistant to get personalized time slot recommendations
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                          <Star className="h-5 w-5 text-yellow-500" />
+                          AI Recommendations
+                        </h3>
+                        {suggestions.map((suggestion, index) => (
+                          <div
+                            key={index}
+                            className={`cursor-pointer transition-all duration-200 ${
+                              selectedSuggestion === suggestion
+                                ? 'ring-2 ring-primary-500 bg-primary-50'
+                                : 'hover:bg-gray-50'
+                            }`}
+                            onClick={() => setSelectedSuggestion(suggestion)}
+                          >
+                            <SuggestionCard
                             suggestion={suggestion}
                             onBook={() => setSelectedSuggestion(suggestion)}
                           />
@@ -1527,6 +1546,7 @@ export default function PlanMeeting() {
                   )}
                 </div>
               </div>
+            )}
 
           {/* Continue Button */}
           {currentStep === 'suggestions' && suggestions.length > 0 && (
