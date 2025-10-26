@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Clock, Globe, LogOut, RefreshCw, Users } from 'lucide-react';
+import { User, Globe, LogOut, RefreshCw, Users } from 'lucide-react';
 import { useMsal, AuthenticatedTemplate, UnauthenticatedTemplate } from '@azure/msal-react';
 import Loader from '@/components/Loader';
 import { db } from '@/lib/firebase';
