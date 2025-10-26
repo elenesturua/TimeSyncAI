@@ -112,14 +112,30 @@ export default function GroupManagement() {
     try {
       console.log('Loading groups for user:', currentUser.id);
       
-      // Get groups where user is owner
-      const groupsQuery = query(
+      // Get groups where user is owner OR participant
+      const ownerGroupsQuery = query(
         collection(db, 'participantGroups'),
         where('ownerId', '==', currentUser.id)
       );
+      const ownerSnapshot = await getDocs(ownerGroupsQuery);
       
-      const groupsSnapshot = await getDocs(groupsQuery);
-      console.log('Groups snapshot:', groupsSnapshot.docs.length);
+      const participantGroupsQuery = query(
+        collection(db, 'participantGroups'),
+        where('participants', 'array-contains', currentUser.id)
+      );
+      const participantSnapshot = await getDocs(participantGroupsQuery);
+      
+      // Combine both results and deduplicate
+      const allGroupDocs = [
+        ...ownerSnapshot.docs,
+        ...participantSnapshot.docs.filter(doc => 
+          !ownerSnapshot.docs.some(oDoc => oDoc.id === doc.id)
+        )
+      ];
+      
+      console.log('Owner groups:', ownerSnapshot.docs.length);
+      console.log('Participant groups:', participantSnapshot.docs.length);
+      console.log('Total groups:', allGroupDocs.length);
       
       // Get pending invitations for this user
       const invitationsQuery = query(
@@ -156,7 +172,7 @@ export default function GroupManagement() {
       
       // Load admin info for groups
       const groupsData = await Promise.all(
-        groupsSnapshot.docs.map(async (docSnapshot) => {
+        allGroupDocs.map(async (docSnapshot) => {
           const groupData = docSnapshot.data();
           // Get owner info
           const ownerDoc = await getDoc(doc(db, 'users', groupData.ownerId));
