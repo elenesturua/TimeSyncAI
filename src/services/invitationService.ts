@@ -62,10 +62,22 @@ export class InvitationService {
         to: email,
         organizerName: 'TimeSyncAI',
         organizerEmail: 'noreply@timesyncai.com',
-        plan: `You've been invited to join a participant group for meeting scheduling.\n\nInvitation Link: ${invitationLink}\n\nPlease click the link to accept the invitation and connect your calendar to help find the best meeting times for everyone.`,
+        plan: `Welcome to TimeSyncAI!
+
+You've been invited to join a participant group for meeting scheduling.
+
+Invitation Link: ${invitationLink}
+
+Click the link above to:
+• Accept the invitation
+• Sign up for TimeSyncAI
+• Connect your calendar
+• Start finding optimal meeting times with your team
+
+TimeSyncAI helps teams schedule meetings by finding the best available times for everyone. Connect your calendar to get started!`,
         meeting: {
-          title: 'Group Invitation - Join TimeSyncAI',
-          description: 'You\'ve been invited to join a participant group for meeting scheduling. Please click the invitation link to accept and connect your calendar.',
+          title: 'Welcome to TimeSyncAI',
+          description: 'Welcome to TimeSyncAI - Connect your calendar to start scheduling optimal meetings with your team.',
           location: 'Virtual Meeting',
           startISO: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
           endISO: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(), // 1 hour duration

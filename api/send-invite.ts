@@ -105,16 +105,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
     });
 
-    const header = parsed.meeting ? `You're invited: ${parsed.meeting.title}` : `You're invited (choose a time)`;
+    // Different header for text-only (group) invitations vs meeting invitations
+    const header = parsed.textOnly 
+      ? `You're invited to join TimeSyncAI`
+      : parsed.meeting 
+        ? `You're invited: ${parsed.meeting.title}` 
+        : `You're invited (choose a time)`;
 
     const infoLines: string[] = [];
-    if (parsed.meeting) {
+    if (parsed.meeting && !parsed.textOnly) {
       const m = parsed.meeting;
       infoLines.push(
         `When: ${DateTime.fromISO(m.startISO).toFormat('fff')} – ${DateTime.fromISO(m.endISO).toFormat('fff')} (${m.timezone})`,
         m.location ? `Where: ${m.location}` : ''
       );
-    } else if (parsed.options?.length) {
+    } else if (parsed.options?.length && !parsed.textOnly) {
       infoLines.push('This email includes calendar invites for each option. Accept the one that works best:');
       parsed.options.forEach((opt, i) => {
         infoLines.push(
@@ -123,14 +128,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const text = [header, ...infoLines.filter(Boolean), '', parsed.plan ? `Plan:\n${parsed.plan}` : '', 'Please Accept/Decline in your calendar app.'].join('\n');
+    // Build text content differently for group invitations vs meeting invitations
+    let text: string;
+    if (parsed.textOnly) {
+      // Group invitation - welcome email style
+      text = [header, '', parsed.plan || ''].join('\n');
+    } else {
+      // Meeting invitation - include calendar details
+      text = [header, ...infoLines.filter(Boolean), '', parsed.plan ? `Plan:\n${parsed.plan}` : '', 'Please Accept or Decline in your calendar app.'].join('\n');
+    }
 
-    const html = `
-      <p>${header}</p>
-      ${infoLines.filter(Boolean).map((line) => `<p>${line}</p>`).join('')}
-      ${parsed.plan ? `<p><b>Plan:</b><br/>${parsed.plan.replace(/\n/g, '<br/>')}</p>` : ''}
-      <p>Please <b>Accept</b> or <b>Decline</b> in your calendar app.</p>
-    `;
+    let html: string;
+    if (parsed.textOnly) {
+      // Group invitation - welcome email style
+      html = `
+        <p style="font-size: 18px; font-weight: bold; margin-bottom: 12px;">${header}</p>
+        ${parsed.plan ? `<p>${parsed.plan.replace(/\n/g, '<br/>')}</p>` : ''}
+      `;
+    } else {
+      // Meeting invitation - include calendar details
+      html = `
+        <p>${header}</p>
+        ${infoLines.filter(Boolean).map((line) => `<p>${line}</p>`).join('')}
+        ${parsed.plan ? `<p><b>Plan:</b><br/>${parsed.plan.replace(/\n/g, '<br/>')}</p>` : ''}
+        <p>Please <b>Accept</b> or <b>Decline</b> in your calendar app.</p>
+      `;
+    }
 
     const attachments: Array<{ filename: string; content: string; contentType: string }> = [];
 
