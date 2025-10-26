@@ -263,10 +263,9 @@ export default function PlanMeeting() {
     
     setIsCreatingMeeting(true);
     try {
-      // Parse local time ISO strings (format: YYYY-MM-DDTHH:MM:SS)
-      // Convert to local Date objects
-      const startDate = new Date(suggestion.startISO.replace('T', ' '));
-      const endDate = new Date(suggestion.endISO.replace('T', ' '));
+      // Parse timezone-aware ISO strings
+      const startDate = new Date(suggestion.startISO);
+      const endDate = new Date(suggestion.endISO);
       
       console.log('📧 Sending invitations with meeting time:', {
         startISO_original: suggestion.startISO,
@@ -1565,10 +1564,9 @@ export default function PlanMeeting() {
                 <h3 className="font-semibold text-primary-900 mb-2">Selected Meeting Time</h3>
                 <p className="text-primary-700">
                   {(() => {
-                    // Parse Chicago time ISO strings (format: YYYY-MM-DDTHH:MM:SS)
-                    // These are already in Chicago time, just parse them
-                    const startDate = new Date(selectedSuggestion.startISO.replace('T', ' '));
-                    const endDate = new Date(selectedSuggestion.endISO.replace('T', ' '));
+                    // Parse timezone-aware ISO strings (format: YYYY-MM-DDTHH:MM:SS±HH:MM)
+                    const startDate = new Date(selectedSuggestion.startISO);
+                    const endDate = new Date(selectedSuggestion.endISO);
                     return `${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
                   })()}
                 </p>

@@ -243,16 +243,22 @@ export class AISchedulingService {
     participants: PlanMeetingRequest['participants']
   ): Suggestion[] {
     return scoredSlots.slice(0, 10).map((slot: any) => {
-      // Format dates as ISO strings in Chicago time (America/Chicago timezone)
-      // Just extract hours/minutes directly from the date since it's already in local time
+      // Format dates as ISO strings with timezone info
+      // The scheduler creates dates in local time (Chicago), so we need to preserve the timezone
       const formatChicagoISO = (date: Date): string => {
+        // Format as: 2024-10-27T09:10:00-05:00 (with timezone offset)
+        const offset = -date.getTimezoneOffset(); // Get offset in minutes
+        const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+        const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
+        const offsetSign = offset >= 0 ? '+' : '-';
+        
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         const hours = String(date.getHours()).padStart(2, '0');
         const minutes = String(date.getMinutes()).padStart(2, '0');
         const seconds = String(date.getSeconds()).padStart(2, '0');
-        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
       };
       
       const startISO = formatChicagoISO(slot.start);
