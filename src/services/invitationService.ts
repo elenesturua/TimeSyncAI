@@ -50,7 +50,19 @@ export class InvitationService {
     const invitationLink = `${baseUrl}/invite/${token}`;
     
     try {
-      // Call Vercel serverless function
+      // Check if we're in local development
+      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      
+      if (isDevelopment) {
+        console.log('⚠️ Development mode detected - skipping email sending.');
+        console.log('📧 Would send invitation email to:', email);
+        console.log('🔗 Invitation link:', invitationLink);
+        console.log('💡 Deploy to Vercel with SMTP credentials to enable email sending.');
+        // In development, just log and return without actually sending
+        return;
+      }
+      
+      // Call Vercel serverless function (only in production)
       const apiUrl = '/api/send-invite';
       console.log('🔗 Calling Vercel API:', apiUrl);
       console.log('📧 Sending invitation to:', email);
