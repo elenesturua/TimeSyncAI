@@ -1564,7 +1564,13 @@ export default function PlanMeeting() {
               <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
                 <h3 className="font-semibold text-primary-900 mb-2">Selected Meeting Time</h3>
                 <p className="text-primary-700">
-                  {new Date(selectedSuggestion.startISO).toLocaleDateString('en-US', { timeZone: 'America/Chicago', weekday: 'long', month: 'short', day: 'numeric' })}, {new Date(selectedSuggestion.startISO).toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' })} - {new Date(selectedSuggestion.endISO).toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' })}
+                  {(() => {
+                    const startDate = new Date(selectedSuggestion.startISO);
+                    const endDate = new Date(selectedSuggestion.endISO);
+                    // When parsing UTC ISO strings, we need to add back the offset
+                    // If the time shows as UTC (5 hours ahead), we need to display local time
+                    return `${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+                  })()}
                 </p>
                 <p className="text-sm text-primary-600 mt-1">
                   Duration: {duration} minutes • {selectedSuggestion.badges.join(', ')}
