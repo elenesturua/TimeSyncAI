@@ -1219,7 +1219,7 @@ export default function PlanMeeting() {
                             <div key={event.id} className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
                               <div className="font-medium">{event.subject}</div>
                               <div className="text-blue-600">
-                                {new Date(event.start.dateTime).toLocaleString('en-US', { timeZone: event.start.timeZone || 'America/Chicago' })} - {new Date(event.end.dateTime).toLocaleString('en-US', { timeZone: event.end.timeZone || 'America/Chicago' })}
+                                {new Date(event.start.dateTime).toLocaleString('en-US', { timeZone: event.start.timeZone || 'America/New_York' })} - {new Date(event.end.dateTime).toLocaleString('en-US', { timeZone: event.end.timeZone || 'America/New_York' })}
                               </div>
                             </div>
                           ))}

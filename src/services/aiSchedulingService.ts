@@ -128,11 +128,11 @@ export class AISchedulingService {
                 ? event.end
                 : event.end.dateTime;
               
-              // Since these are already in UTC-6, we need to convert them back to UTC
-              // for proper Date parsing. UTC-6 means we need to ADD 6 hours to get back to UTC
-              const convertToUTC = (utcMinus6DateTime: string): string => {
-                const date = new Date(utcMinus6DateTime);
-                date.setHours(date.getHours() + 6);
+              // Since these are already in UTC-5, we need to convert them back to UTC
+              // for proper Date parsing. UTC-5 means we need to ADD 5 hours to get back to UTC
+              const convertToUTC = (utcMinus5DateTime: string): string => {
+                const date = new Date(utcMinus5DateTime);
+                date.setHours(date.getHours() + 5);
                 return date.toISOString();
               };
               

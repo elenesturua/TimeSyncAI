@@ -83,24 +83,24 @@ export const getCalendarEvents = async (
       })
       .get();
 
-    // Convert UTC times to UTC-6
+    // Convert UTC times to UTC-5
     const eventsWithTimezone = (events.value || []).map((event: any) => {
-      // Convert UTC datetime to UTC-6
-      const convertToUTC6 = (utcDateTime: string): string => {
+      // Convert UTC datetime to UTC-5
+      const convertToUTC5 = (utcDateTime: string): string => {
         const date = new Date(utcDateTime);
-        date.setHours(date.getHours() - 6);
+        date.setHours(date.getHours() - 5);
         return date.toISOString();
       };
       
       return {
         ...event,
         start: {
-          dateTime: convertToUTC6(event.start.dateTime),
-          timeZone: 'America/Chicago' // UTC-6
+          dateTime: convertToUTC5(event.start.dateTime),
+          timeZone: 'America/New_York' // UTC-5 (EST)
         },
         end: {
-          dateTime: convertToUTC6(event.end.dateTime),
-          timeZone: 'America/Chicago'
+          dateTime: convertToUTC5(event.end.dateTime),
+          timeZone: 'America/New_York'
         }
       };
     });

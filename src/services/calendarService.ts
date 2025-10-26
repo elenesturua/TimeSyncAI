@@ -14,11 +14,11 @@ import { db } from '../lib/firebase';
 import { CalendarEvent, CalendarSync } from '../types/firestore';
 import { getCalendarEvents, createGraphClient } from '../lib/graphApi';
 
-// Helper function to convert UTC datetime string to UTC-6
-function convertToUTC6(utcDateTime: string): string {
+// Helper function to convert UTC datetime string to UTC-5 (CST)
+function convertToUTC5(utcDateTime: string): string {
   const date = new Date(utcDateTime);
-  // UTC-6 is 6 hours behind UTC
-  date.setHours(date.getHours() - 6);
+  // UTC-5 is 5 hours behind UTC
+  date.setHours(date.getHours() - 5);
   return date.toISOString();
 }
 
@@ -44,24 +44,24 @@ export class CalendarService {
     
     // Add new events
     for (const event of events) {
-      // Convert UTC times to UTC-6
+      // Convert UTC times to UTC-5
       const startDateTime = typeof event.start === 'string' 
-        ? convertToUTC6(event.start) 
-        : convertToUTC6(event.start.dateTime);
+        ? convertToUTC5(event.start) 
+        : convertToUTC5(event.start.dateTime);
       const endDateTime = typeof event.end === 'string'
-        ? convertToUTC6(event.end)
-        : convertToUTC6(event.end.dateTime);
+        ? convertToUTC5(event.end)
+        : convertToUTC5(event.end.dateTime);
       
       const calendarEvent: Omit<CalendarEvent, 'id'> = {
         userId,
         subject: event.subject || 'No Subject',
         start: {
           dateTime: startDateTime,
-          timeZone: 'America/Chicago' // UTC-6
+          timeZone: 'America/New_York' // UTC-5 (EST)
         },
         end: {
           dateTime: endDateTime,
-          timeZone: 'America/Chicago' // UTC-6
+          timeZone: 'America/New_York' // UTC-5 (EST)
         },
         isAllDay: event.isAllDay || false,
         showAs: event.showAs || 'busy',
