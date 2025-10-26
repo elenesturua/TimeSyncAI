@@ -115,15 +115,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const infoLines: string[] = [];
     if (parsed.meeting && !parsed.textOnly) {
       const m = parsed.meeting;
+      // Convert to Central Time (CDT/CST) for display
+      const startCentral = DateTime.fromISO(m.startISO, { zone: 'utc' }).setZone('America/Chicago');
+      const endCentral = DateTime.fromISO(m.endISO, { zone: 'utc' }).setZone('America/Chicago');
       infoLines.push(
-        `When: ${DateTime.fromISO(m.startISO).toFormat('fff')} – ${DateTime.fromISO(m.endISO).toFormat('fff')} (${m.timezone})`,
+        `When: ${startCentral.toFormat('ccc, LLL d, h:mm a')} – ${endCentral.toFormat('h:mm a')} CST`,
         m.location ? `Where: ${m.location}` : ''
       );
     } else if (parsed.options?.length && !parsed.textOnly) {
       infoLines.push('This email includes calendar invites for each option. Accept the one that works best:');
       parsed.options.forEach((opt, i) => {
+        const startCentral = DateTime.fromISO(opt.startISO, { zone: 'utc' }).setZone('America/Chicago');
+        const endCentral = DateTime.fromISO(opt.endISO, { zone: 'utc' }).setZone('America/Chicago');
         infoLines.push(
-          `• Option ${i + 1}: ${DateTime.fromISO(opt.startISO).toFormat('fff')} – ${DateTime.fromISO(opt.endISO).toFormat('fff')} (${opt.timezone})${opt.location ? ` @ ${opt.location}` : ''}`
+          `• Option ${i + 1}: ${startCentral.toFormat('ccc, LLL d, h:mm a')} – ${endCentral.toFormat('h:mm a')} CST${opt.location ? ` @ ${opt.location}` : ''}`
         );
       });
     }

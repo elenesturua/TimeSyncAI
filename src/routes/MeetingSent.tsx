@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Calendar, Eye, Save } from 'lucide-react';
-import CopyButton from '@/components/CopyButton';
 import Loader from '@/components/Loader';
 
 export default function MeetingSent() {
@@ -33,8 +32,6 @@ export default function MeetingSent() {
       </div>
     );
   }
-
-  const meetingLink = `https://timesyncai.com/meeting/${meetingData.id || 'temp-id'}`;
 
   const handleSaveAsGroup = async () => {
     setIsSavingGroup(true);
@@ -105,21 +102,6 @@ export default function MeetingSent() {
           </div>
         </div>
 
-        {/* Meeting Link - only show for scheduled meetings */}
-        {isScheduledMeeting && (
-          <>
-            <div className="bg-blue-50 rounded-lg p-4 mb-6">
-              <p className="text-sm text-blue-700 mb-2">Meeting Link:</p>
-              <div className="flex items-center space-x-2">
-                <code className="flex-1 text-sm bg-white p-2 rounded border text-gray-800">
-                  {meetingLink}
-                </code>
-                <CopyButton text={meetingLink} />
-              </div>
-            </div>
-          </>
-        )}
-
         {/* Actions */}
         <div className="space-y-3 mb-6">
           {isScheduledMeeting && (
@@ -166,10 +148,10 @@ export default function MeetingSent() {
 
         <div className="border-t border-gray-200 pt-4">
           <button
-            onClick={() => navigate('/create-meeting')}
+            onClick={() => navigate('/dashboard')}
             className="text-primary-500 hover:text-primary-600 font-medium"
           >
-            Create Another Meeting →
+            Back to Home →
           </button>
         </div>
       </div>
