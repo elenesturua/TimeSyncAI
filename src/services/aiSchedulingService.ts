@@ -174,6 +174,7 @@ export class AISchedulingService {
         }
       } catch (error) {
         console.error(`Error fetching calendar for ${participant.email}:`, error);
+        console.error(`Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
         // Return empty busy schedule if fetch fails (treat as available)
         return {
           id: participant.email,
@@ -193,6 +194,11 @@ export class AISchedulingService {
     const result = await Promise.all(calendarPromises);
     const totalBusy = result.reduce((sum, p) => sum + p.busy.length, 0);
     console.log(`Fetched calendars for all participants. Total busy periods: ${totalBusy}`);
+    
+    // Log which participants have busy periods
+    result.forEach((p, index) => {
+      console.log(`Participant ${index + 1}: ${p.name || p.id} - ${p.busy.length} busy periods`);
+    });
     
     if (totalBusy === 0) {
       console.log('No participant calendars found - generating suggestions based on working hours only');
