@@ -263,15 +263,9 @@ export default function PlanMeeting() {
     
     setIsCreatingMeeting(true);
     try {
-      // Convert UTC times to local Chicago time for display
-      // Then add 5 hours to send to backend (to account for timezone offset)
+      // Use the UTC times directly - they're already correct
       const startUTC = new Date(suggestion.startISO);
       const endUTC = new Date(suggestion.endISO);
-      
-      // Add 5 hours to convert from UTC to local Chicago time for the backend
-      // This ensures the backend creates the ICS with the correct time
-      startUTC.setHours(startUTC.getHours() + 5);
-      endUTC.setHours(endUTC.getHours() + 5);
       
       console.log('📧 Sending invitations with meeting time:', {
         startISO_original: suggestion.startISO,
